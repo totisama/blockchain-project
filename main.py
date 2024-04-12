@@ -67,7 +67,7 @@ class MyCommunity(Community):
         #     self.stop()
         #     return
 
-    @message_wrapper(Transaction)
+    @lazy_wrapper(Transaction)
     async def on_message(self, peer: Peer, payload: Transaction) -> None:
 
         # Add to pending transactions
