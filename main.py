@@ -35,6 +35,8 @@ class MyCommunity(Community):
       self.finalized_txs = []
       self.balances = defaultdict(lambda: 1000)
 
+      self.add_message_handler(Transaction, self.on_transaction)
+
     def started(self) -> None:
       print('started')
       self.register_task("tx_create", self.create_transaction, delay=1, interval=5)
@@ -68,7 +70,8 @@ class MyCommunity(Community):
         #     return
 
     @lazy_wrapper(Transaction)
-    async def on_message(self, peer: Peer, payload: Transaction) -> None:
+    async def on_transaction(self, peer: Peer, payload: Transaction) -> None:
+        print('Received transaction', payload.nonce, 'from', self.get_peer_id(peer))
 
         # Add to pending transactions
         if (payload.sender, payload.nonce) not in [(tx.sender, tx.nonce) for tx in self.finalized_txs] and (
@@ -78,8 +81,8 @@ class MyCommunity(Community):
         # Gossip to other nodes
         # WIP: Implement correct gossiping
         # for peer in [i for i in self.get_peers() if self.node_id_from_peer(i) % 2 == 1]:
-        for peer in self.get_peers():
-            self.ez_send(peer, payload)
+        # for peer in self.get_peers():
+        #     self.ez_send(peer, payload)
 
 async def start_communities() -> None:
   for i in [1, 2]:
