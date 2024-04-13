@@ -12,6 +12,7 @@ from ipv8_service import IPv8
 import binascii
 import hashlib
 import random
+from storage import *
 
 # Amount of peers to send message to
 k = 2
@@ -36,6 +37,7 @@ class MyCommunity(Community):
       self.pending_txs = []
       self.finalized_txs = []
       self.balances = defaultdict(lambda: 1000)
+      self.storage = Storage()
 
       self.add_message_handler(Transaction, self.on_transaction)
 
@@ -44,6 +46,8 @@ class MyCommunity(Community):
       # Testing purpose
       if id == 1:
         self.register_task("tx_create", self.create_transaction, delay=1, interval=5)
+      # WIP: Check if this is the right way to check transactions
+      self.register_task("check_txs", self.check_transactions, delay=1, interval=7)
 
     def peers_found(self):
       return len(self.get_peers()) > 0
@@ -68,9 +72,6 @@ class MyCommunity(Community):
         print(f'[Node {self.get_peer_id(self.my_peer)}] Sending transaction {tx.nonce} to {self.get_peer_id(peer)}')
         self.ez_send(peer, tx)
 
-        # WIP: Check if this is the right place to call check_transactions
-        self.check_transactions()
-
         # WIP: We need this?
         # if self.counter > self.max_messages:
         #     self.cancel_pending_task("tx_create")
@@ -88,6 +89,7 @@ class MyCommunity(Community):
         self.executed_checks += 1
         # WIP: Create block
 
+        self.storage.print_storage()
 
         # WIP: We need this?
         # if self.executed_checks > 10:
@@ -97,7 +99,11 @@ class MyCommunity(Community):
 
     @lazy_wrapper(Transaction)
     async def on_transaction(self, peer: Peer, payload: Transaction) -> None:
-        print('Received transaction', payload.nonce, 'from', self.get_peer_id(peer))
+        my_id = self.get_peer_id(self.my_peer)
+
+        print(f'[Node {my_id}] Received transaction', payload.nonce, 'from', self.get_peer_id(peer))
+
+        self.storage.save(payload.nonce, my_id)
 
         # Add to pending transactions
         if (payload.sender, payload.nonce) not in [(tx.sender, tx.nonce) for tx in self.finalized_txs] and (
