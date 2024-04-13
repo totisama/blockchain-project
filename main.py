@@ -13,7 +13,8 @@ import binascii
 import hashlib
 import random
 
-letters = 'abcdefghijklmnopqrstuvwxyz'
+# Amount of peers to send message to
+k = 2
 
 @dataclass(msg_id=1)  # The value 1 identifies this message and must be unique per community
 class Transaction:
@@ -21,6 +22,7 @@ class Transaction:
     receiver: bytes
     amount: int
     nonce: int = 1
+    ttl: int = 3
 
 class MyCommunity(Community):
     community_id = b'harbourspaceuniverse'
@@ -37,9 +39,11 @@ class MyCommunity(Community):
 
       self.add_message_handler(Transaction, self.on_transaction)
 
-    def started(self) -> None:
+    def started(self, id) -> None:
       print('started')
-      self.register_task("tx_create", self.create_transaction, delay=1, interval=5)
+      # Testing purpose
+      if id == 1:
+        self.register_task("tx_create", self.create_transaction, delay=1, interval=5)
 
     def peers_found(self):
       return len(self.get_peers()) > 0
@@ -89,7 +93,7 @@ class MyCommunity(Community):
         # if self.executed_checks > 10:
         #     self.cancel_pending_task("check_txs")
         #     print(self.balances)
-            # self.stop()
+        #     self.stop()
 
     @lazy_wrapper(Transaction)
     async def on_transaction(self, peer: Peer, payload: Transaction) -> None:
@@ -100,20 +104,25 @@ class MyCommunity(Community):
         payload.sender, payload.nonce) not in [(tx.sender, tx.nonce) for tx in self.pending_txs]:
             self.pending_txs.append(payload)
 
-        # Gossip to other nodes
-        # WIP: Implement correct gossiping
-        # for peer in [i for i in self.get_peers() if self.node_id_from_peer(i) % 2 == 1]:
-        # for peer in self.get_peers():
-        #     self.ez_send(peer, payload)
+        # If we are connected to more than k peers, we can gossip
+        # only if the ttl is greater than 0
+        if len(self.get_peers()) > k and payload.ttl > 0:
+          payload.ttl -= 1
+
+          # push gossip to k random peers
+          get_peers_to_distribute = random.sample(self.get_peers(), k)
+          for peer in get_peers_to_distribute:
+              self.ez_send(peer, payload)
 
 async def start_communities() -> None:
-  for i in [1, 2]:
+  # We create 7 peers
+  for i in range(1, 8):
     builder = ConfigBuilder().clear_keys().clear_overlays()
     builder.add_key("my peer", "medium", f"ec{i}.pem")
     builder.add_overlay("MyCommunity", "my peer",
       [WalkerDefinition(Strategy.RandomWalk,
                         10, {'timeout': 3.0})],
-      default_bootstrap_defs, {}, [('started',)])
+      default_bootstrap_defs, {}, [('started', i)])
     await IPv8(builder.finalize(),
       extra_communities={'MyCommunity': MyCommunity}).start()
   await run_forever()
