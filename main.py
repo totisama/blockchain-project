@@ -44,7 +44,7 @@ class MyCommunity(Community):
     def peers_found(self):
       return len(self.get_peers()) > 0
 
-    def get_peer_id(self, peer: Peer =None):
+    def get_peer_id(self, peer: Peer = None):
       return binascii.hexlify(peer.mid).decode()
 
     def create_transaction(self):
@@ -64,10 +64,32 @@ class MyCommunity(Community):
         print(f'[Node {self.get_peer_id(self.my_peer)}] Sending transaction {tx.nonce} to {self.get_peer_id(peer)}')
         self.ez_send(peer, tx)
 
+        # WIP: Check if this is the right place to call check_transactions
+        self.check_transactions()
+
+        # WIP: We need this?
         # if self.counter > self.max_messages:
         #     self.cancel_pending_task("tx_create")
         #     self.stop()
         #     return
+
+    def check_transactions(self):
+        for tx in self.pending_txs:
+            if self.balances[tx.sender] - tx.amount >= 0:
+                self.balances[tx.sender] -= tx.amount
+                self.balances[tx.receiver] += tx.amount
+                self.pending_txs.remove(tx)
+                self.finalized_txs.append(tx)
+
+        self.executed_checks += 1
+        # WIP: Create block
+
+
+        # WIP: We need this?
+        # if self.executed_checks > 10:
+        #     self.cancel_pending_task("check_txs")
+        #     print(self.balances)
+            # self.stop()
 
     @lazy_wrapper(Transaction)
     async def on_transaction(self, peer: Peer, payload: Transaction) -> None:
