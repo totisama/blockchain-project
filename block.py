@@ -1,6 +1,7 @@
 import hashlib
 
 from merkle_tree import MerkleTree
+import pickle
 
 
 class Block:
@@ -10,8 +11,18 @@ class Block:
 
     def add_transaction(self, transaction):
         self.transactions.append(transaction)
-        transaction_hash = hashlib.sha256(transaction.pack()).hexdigest()
+        serialized_data = self.serialize(transaction)
+        transaction_hash = hashlib.sha256(serialized_data).hexdigest()
         self.merkle_tree.add_leaf(transaction_hash)
 
     def is_full(self):
         return len(self.transactions) >= 10
+
+    def serialize(self, transaction) -> bytes:
+        return pickle.dumps({
+            'sender': transaction.sender,
+            'receiver': transaction.receiver,
+            'amount': transaction.amount,
+            'nonce': transaction.nonce,
+            'ttl': transaction.ttl
+        })
