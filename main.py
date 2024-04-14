@@ -87,15 +87,11 @@ class MyCommunity(Community):
                 self.balances[tx.receiver] += tx.amount
                 self.pending_txs.remove(tx)
                 self.finalized_txs.append(tx)
+                self.current_block.add_transaction(tx)
 
-        self.executed_checks += 1
-        # WIP: Create block
-
-        # WIP: We need this?
-        # if self.executed_checks > 10:
-        #     self.cancel_pending_task("check_txs")
-        #     print(self.balances)
-        #     self.stop()
+                if self.current_block.is_full():
+                    self.finalize_and_broadcast_block()
+                    break
 
     @lazy_wrapper(Transaction)
     async def on_transaction(self, peer: Peer, payload: Transaction) -> None:
@@ -118,9 +114,6 @@ class MyCommunity(Community):
             for peer in get_peers_to_distribute:
                 self.ez_send(peer, payload)
 
-        self.current_block.add_transaction(payload)
-        if self.current_block.is_full():
-            self.finalize_and_broadcast_block()
 
     def finalize_and_broadcast_block(self):
         self.current_block.merkle_tree.recalculate_tree()
