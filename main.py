@@ -2,6 +2,7 @@ import binascii
 import random
 from asyncio import run
 from collections import defaultdict
+import pickle
 
 from ipv8.community import Community, CommunitySettings
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
@@ -28,6 +29,7 @@ class Transaction:
 @dataclass(msg_id=2)
 class BlockMessage:
     hash: str
+    block: bytes
 
 class MyCommunity(Community):
     community_id = b'harbourspaceuniverse'
@@ -123,12 +125,14 @@ class MyCommunity(Community):
 
     @lazy_wrapper(BlockMessage)
     async def on_block(self, peer: Peer, payload: BlockMessage) -> None:
-        print('----------on block----------', payload.hash)
+        print('----------on block----------')
+        unserialized_block = pickle.loads(payload.block)
+        print(unserialized_block)
 
         # Check if the block is already in the chain
         if payload.hash not in [block.merkle_tree.get_root_hash() for block in self.blocks]:
-            # WIP: We should append the block, not only the hash
-            self.blocks.append(payload.hash)
+            print(f'Block {payload.hash} not in my chain {self.get_peer_id(peer)}')
+            self.blocks.append(unserialized_block)
 
         # WIP: Necessary check?
         # Check if the previous block hash is indeed the past block
@@ -138,12 +142,13 @@ class MyCommunity(Community):
         new_block_hash = self.current_block.merkle_tree.get_root_hash()
         print(f'New block hash: {new_block_hash}')
         self.blocks.append(self.current_block)
+        serialized_block = pickle.dumps(self.current_block)
         self.current_block = Block(new_block_hash)
 
-        self.broadcast_new_block(new_block_hash)
+        self.broadcast_new_block(new_block_hash, serialized_block)
 
-    def broadcast_new_block(self, block_hash):
-        blockMessage = BlockMessage(block_hash)
+    def broadcast_new_block(self, block_hash, serialized_block):
+        blockMessage = BlockMessage(block_hash, serialized_block)
 
         for peer in self.get_peers():
             self.ez_send(peer, blockMessage)

@@ -5,9 +5,9 @@ import pickle
 
 
 class Block:
-    def __init__(self, previous_hash):
+    def __init__(self, previous_hash, transactions=None):
         self.previous_hash = previous_hash
-        self.transactions = []
+        self.transactions = transactions if transactions is not None else []
         self.merkle_tree = MerkleTree()
 
     def add_transaction(self, transaction):
@@ -27,3 +27,7 @@ class Block:
             'nonce': transaction.nonce,
             'ttl': transaction.ttl
         })
+
+    def __reduce__(self):
+        # Customizing pickling for Block class
+        return (self.__class__, (self.previous_hash, self.merkle_tree))
