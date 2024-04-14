@@ -5,7 +5,8 @@ import pickle
 
 
 class Block:
-    def __init__(self):
+    def __init__(self, previous_hash):
+        self.previous_hash = previous_hash
         self.transactions = []
         self.merkle_tree = MerkleTree()
 
