@@ -25,13 +25,16 @@ class MerkleTree:
             new_level = []
             for i in range(0, len(nodes), 2):
                 left_child = nodes[i]
-                right_child = nodes[i + 1] if i + 1 < len(nodes) else nodes[i]
-                node_hash = hashlib.sha256((left_child.hash + right_child.hash).encode('utf-8')).hexdigest()
-                parent_node = MerkleNode(node_hash)
-                parent_node.left_child, parent_node.right_child = left_child, right_child
+                right_child = nodes[i + 1] if i + 1 < len(nodes) else None
+                if right_child:
+                    node_hash = hashlib.sha256((left_child.hash + right_child.hash).encode('utf-8')).hexdigest()
+                    parent_node = MerkleNode(node_hash)
+                    parent_node.left_child, parent_node.right_child = left_child, right_child
+                    left_child.parent = parent_node
+                    right_child.parent = parent_node
+                else:
+                    parent_node = left_child
                 new_level.append(parent_node)
-            if len(new_level) % 2 != 0:  # If odd number of nodes, duplicate last node
-                new_level.append(new_level[-1])
             nodes = new_level
         self.root = nodes[0]
 
