@@ -25,6 +25,9 @@ class Transaction:
     nonce: int = 1
     ttl: int = 3
 
+@dataclass(msg_id=2)
+class BlockMessage:
+    hash: str
 
 class MyCommunity(Community):
     community_id = b'harbourspaceuniverse'
@@ -39,9 +42,10 @@ class MyCommunity(Community):
         self.finalized_txs = []
         self.balances = defaultdict(lambda: 1000)
         self.blocks = []  # List to store finalized blocks
-        self.current_block = Block()  # Current working block
+        self.current_block = Block('0')  # Current working block
 
         self.add_message_handler(Transaction, self.on_transaction)
+        self.add_message_handler(BlockMessage, self.on_block)
 
     def started(self, id) -> None:
         print('started')
@@ -49,7 +53,7 @@ class MyCommunity(Community):
         if id == 1:
             self.register_task("tx_create", self.create_transaction, delay=1, interval=5)
         # WIP: Check if this is the right way to check transactions
-        self.register_task("check_txs", self.check_transactions, delay=1, interval=7)
+        self.register_task("check_txs", self.check_transactions, delay=1, interval=5)
 
     def peers_found(self):
         return len(self.get_peers()) > 0
@@ -81,6 +85,8 @@ class MyCommunity(Community):
         #     return
 
     def check_transactions(self):
+        print(f'[Node {self.get_peer_id(self.my_peer)}] Checking transactions')
+
         for tx in self.pending_txs:
             if self.balances[tx.sender] - tx.amount >= 0:
                 self.balances[tx.sender] -= tx.amount
@@ -90,6 +96,7 @@ class MyCommunity(Community):
                 self.current_block.add_transaction(tx)
 
                 if self.current_block.is_full():
+                    print('Block is full')
                     self.finalize_and_broadcast_block()
                     break
 
@@ -114,19 +121,32 @@ class MyCommunity(Community):
             for peer in get_peers_to_distribute:
                 self.ez_send(peer, payload)
 
+    @lazy_wrapper(BlockMessage)
+    async def on_block(self, peer: Peer, payload: BlockMessage) -> None:
+        print('----------on block----------', payload.hash)
+
+        # Check if the block is already in the chain
+        if payload.hash not in [block.merkle_tree.get_root_hash() for block in self.blocks]:
+            # WIP: We should append the block, not only the hash
+            self.blocks.append(payload.hash)
+
+        # WIP: Necessary check?
+        # Check if the previous block hash is indeed the past block
 
     def finalize_and_broadcast_block(self):
         self.current_block.merkle_tree.recalculate_tree()
         new_block_hash = self.current_block.merkle_tree.get_root_hash()
         print(f'New block hash: {new_block_hash}')
         self.blocks.append(self.current_block)
-        self.current_block = Block()
+        self.current_block = Block(new_block_hash)
 
         self.broadcast_new_block(new_block_hash)
 
     def broadcast_new_block(self, block_hash):
+        blockMessage = BlockMessage(block_hash)
+
         for peer in self.get_peers():
-            self.ez_send(peer, block_hash)
+            self.ez_send(peer, blockMessage)
 
 
 async def start_communities() -> None:
