@@ -3,6 +3,7 @@ import random
 from asyncio import run
 from collections import defaultdict
 import pickle
+import logging
 
 from ipv8.community import Community, CommunitySettings
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
@@ -17,6 +18,7 @@ from block import Block
 # Amount of peers to send message to
 k = 2
 
+logging.basicConfig(filename='blockchain.log', level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
 @dataclass(msg_id=1)  # The value 1 identifies this message and must be unique per community
 class Transaction:
@@ -50,7 +52,7 @@ class MyCommunity(Community):
         self.add_message_handler(BlockMessage, self.on_block)
 
     def started(self, id) -> None:
-        print('started')
+        logging.info('Community started')
         # Testing purpose
         if id == 1:
             self.register_task("tx_create", self.create_transaction, delay=1, interval=5)
@@ -66,9 +68,11 @@ class MyCommunity(Community):
     def create_transaction(self):
         if not self.peers_found():
             print(f'[Node {self.get_peer_id(self.my_peer)}] No peers found')
+            logging.info(f'[Node {self.get_peer_id(self.my_peer)}] No peers found')
             return
 
         print(f'[Node {self.get_peer_id(self.my_peer)}] Creating transaction')
+        logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Creating transaction')
         peer = random.choice([i for i in self.get_peers()])
         peer_id = peer.mid
 
@@ -78,6 +82,9 @@ class MyCommunity(Community):
                          self.counter)
         self.counter += 1
         print(f'[Node {self.get_peer_id(self.my_peer)}] Sending transaction {tx.nonce} to {self.get_peer_id(peer)}')
+        logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Sending transaction {tx.nonce} to {self.get_peer_id(peer)}')
+
+        
         self.ez_send(peer, tx)
 
         # WIP: We need this?
@@ -88,6 +95,8 @@ class MyCommunity(Community):
 
     def check_transactions(self):
         print(f'[Node {self.get_peer_id(self.my_peer)}] Checking transactions')
+        logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Checking transactions')
+
 
         for tx in self.pending_txs:
             if self.balances[tx.sender] - tx.amount >= 0:
@@ -107,6 +116,7 @@ class MyCommunity(Community):
         my_id = self.get_peer_id(self.my_peer)
 
         print(f'[Node {my_id}] Received transaction', payload.nonce, 'from', self.get_peer_id(peer))
+        logging.info(f'[Node {my_id}] Received transaction {payload.nonce} from {self.get_peer_id(peer)}')
 
         # Add to pending transactions
         if (payload.sender, payload.nonce) not in [(tx.sender, tx.nonce) for tx in self.finalized_txs] and (
@@ -125,13 +135,13 @@ class MyCommunity(Community):
 
     @lazy_wrapper(BlockMessage)
     async def on_block(self, peer: Peer, payload: BlockMessage) -> None:
-        print('----------on block----------')
         unserialized_block = pickle.loads(payload.block)
         print(unserialized_block)
 
         # Check if the block is already in the chain
         if payload.hash not in [block.merkle_tree.get_root_hash() for block in self.blocks]:
             print(f'Block {payload.hash} not in my chain {self.get_peer_id(peer)}')
+            logging.info(f'Block {payload.hash} not in my chain {self.get_peer_id(peer)}')
             self.blocks.append(unserialized_block)
 
         # WIP: Necessary check?
@@ -141,6 +151,7 @@ class MyCommunity(Community):
         self.current_block.merkle_tree.recalculate_tree()
         new_block_hash = self.current_block.merkle_tree.get_root_hash()
         print(f'New block hash: {new_block_hash}')
+        logging.info(f'New block hash: {new_block_hash}')
         self.blocks.append(self.current_block)
         serialized_block = pickle.dumps(self.current_block)
         self.current_block = Block(new_block_hash)
@@ -166,6 +177,4 @@ async def start_communities() -> None:
         await IPv8(builder.finalize(),
                    extra_communities={'MyCommunity': MyCommunity}).start()
     await run_forever()
-
-
 run(start_communities())
