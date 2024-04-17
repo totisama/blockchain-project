@@ -1,9 +1,9 @@
 import binascii
+import logging
 import random
 from asyncio import run
 from collections import defaultdict
-import logging
-# import pickle
+from hashlib import sha256
 
 from ipv8.community import Community, CommunitySettings
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
@@ -12,7 +12,6 @@ from ipv8.messaging.payload_dataclass import dataclass
 from ipv8.types import Peer
 from ipv8.util import run_forever
 from ipv8_service import IPv8
-# from typing import Type
 
 from block import Block
 
@@ -28,6 +27,9 @@ class Transaction:
     amount: int
     nonce: int = 1
     ttl: int = 3
+    signature: bytes
+    public_key: bytes
+
 
 @dataclass(msg_id=2)
 class BlockMessage:
@@ -44,8 +46,8 @@ class MyCommunity(Community):
         self.max_messages = 5
         self.executed_checks = 0
 
-        self.pending_txs = []
-        self.finalized_txs = []
+        self.pending_txs = {}
+        self.finalized_txs = {}
         self.balances = defaultdict(lambda: 1000)
         self.blocks = []  # List to store finalized blocks
         self.current_block = Block('0')  # Current working block
@@ -70,13 +72,19 @@ class MyCommunity(Community):
     def get_peer_id(self, peer: Peer = None):
         return binascii.hexlify(peer.mid).decode()
 
+    def get_tx_hash(self, tx: Transaction) -> bytes:
+        tx_copy = Transaction(tx.sender, tx.receiver, tx.amount, tx.nonce, tx.ttl)
+        return sha256(self.serializer.pack_serializable(tx_copy)).digest()
+
+    def get_tx_bytes(self, tx: Transaction) -> bytes:
+        tx_copy = Transaction(tx.sender, tx.receiver, tx.amount, tx.nonce, tx.ttl)
+        return self.serializer.pack_serializable(tx_copy)
+
     def create_transaction(self):
         if not self.peers_found():
-            print(f'[Node {self.get_peer_id(self.my_peer)}] No peers found')
             logging.info(f'[Node {self.get_peer_id(self.my_peer)}] No peers found')
             return
 
-        print(f'[Node {self.get_peer_id(self.my_peer)}] Creating transaction')
         logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Creating transaction')
         peer = random.choice([i for i in self.get_peers()])
         peer_id = peer.mid
@@ -86,18 +94,26 @@ class MyCommunity(Community):
                          10,
                          self.counter)
         self.counter += 1
-        print(f'[Node {self.get_peer_id(self.my_peer)}] Sending transaction {tx.nonce} to {self.get_peer_id(peer)}')
         logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Sending transaction {tx.nonce} to {self.get_peer_id(peer)}')
-
-        
         self.ez_send(peer, tx)
+
+        receiver_peer = random.choice([i for i in self.get_peers()])
+        peer_id = receiver_peer.mid
+
+        # ttl = 3 when creating a tx
+        tx = Transaction(self.my_peer.mid, peer_id, 10, self.counter)
+        tx.public_key = self.my_peer.mid
+        tx.signature = self.crypto.create_signature(self.my_peer.key, self.serializer.pack_serializable(tx))
+        print(f'[Node {self.get_peer_id(self.my_peer)}] Sending transaction {tx.nonce} to {self.get_peer_id(receiver_peer)}')
+        self.pending_txs[self.get_tx_hash(tx)] = tx
+        self.ez_send(receiver_peer, tx)
+        self.counter += 1
 
         # WIP: We need this?
         # if self.counter > self.max_messages:
         #     self.cancel_pending_task("tx_create")
         #     self.stop()
         #     return
-
 
     def block_creation(self):
         # WIP: get every known peer, not only the ones im connected to
@@ -118,27 +134,54 @@ class MyCommunity(Community):
                 self.finalize_and_broadcast_block()
                 break
 
+    # process txs from pending_txs
+    def check_transactions(self):
+        print(f'[Node {self.get_peer_id(self.my_peer)}] Checking transactions')
+
+        for tx in self.pending_txs:
+            if self.balances[tx.sender] - tx.amount >= 0:
+                self.balances[tx.sender] -= tx.amount
+                self.balances[tx.receiver] += tx.amount
+                self.pending_txs.pop(self.get_tx_hash(tx))
+                self.finalized_txs[self.get_tx_hash(tx)] = tx
+                self.current_block.add_transaction(tx)
+            else:
+                self.pending_txs.pop(self.get_tx_hash(tx))
+
+            if self.current_block.is_full():
+                print('Block is full')
+                self.finalize_and_broadcast_block()
+                break
+
     @lazy_wrapper(Transaction)
-    async def on_transaction(self, peer: Peer, payload: Transaction) -> None:
+    async def on_transaction(self, peer: Peer, tx: Transaction) -> None:
         my_id = self.get_peer_id(self.my_peer)
 
-        print(f'[Node {my_id}] Received transaction', payload.nonce, 'from', self.get_peer_id(peer))
         logging.info(f'[Node {my_id}] Received transaction {payload.nonce} from {self.get_peer_id(peer)}')
 
-        # Add to pending transactions
-        if (payload.sender, payload.nonce) not in [(tx.sender, tx.nonce) for tx in self.finalized_txs] and (
-                payload.sender, payload.nonce) not in [(tx.sender, tx.nonce) for tx in self.pending_txs]:
-            self.pending_txs.append(payload)
+        tx_hash = self.get_tx_hash(tx)
+        if tx_hash in self.finalized_txs or tx_hash in self.pending_txs:
+            return
 
+        signature = tx.signature
+        public_key = tx.public_key
+        if not self.crypto.is_valid_signature(tx.public_key, self.get_tx_bytes(tx), signature):
+            return
+
+        tx.public_key = public_key
+        tx.signature = signature
+        self.pending_txs[self.get_tx_hash(tx)] = tx
+
+        # todo
         # If we are connected to more than k peers, we can gossip
         # only if the ttl is greater than 0
-        if len(self.get_peers()) > k and payload.ttl > 0:
-            payload.ttl -= 1
+        if len(self.get_peers()) > k and tx.ttl > 0:
+            tx.ttl -= 1
 
             # push gossip to k random peers
-            get_peers_to_distribute = random.sample(self.get_peers(), k)
+            get_peers_to_distribute = random.sample(self.get_peers(), min(k, len(self.get_peers())))
             for peer in get_peers_to_distribute:
-                self.ez_send(peer, payload)
+                self.ez_send(peer, tx)
 
     @lazy_wrapper(BlockMessage)
     async def receive_block(self, peer: Peer, payload: BlockMessage) -> None:
