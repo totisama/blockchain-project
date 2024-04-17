@@ -2,7 +2,7 @@ import hashlib
 
 
 class MerkleNode:
-    def __init__(self, hash):
+    def __init__(self, hash: str):
         self.hash = hash
         self.parent = None
         self.left_child = None
@@ -12,12 +12,11 @@ class MerkleNode:
 class MerkleTree:
     def __init__(self):
         self.leaves = []
-        self.root = None
+        self.root: MerkleNode = None
 
     def add_leaf(self, leaf_hash):
         new_leaf = MerkleNode(leaf_hash)
         self.leaves.append(new_leaf)
-        self.recalculate_tree()
 
     def recalculate_tree(self):
         nodes = self.leaves
@@ -38,5 +37,5 @@ class MerkleTree:
             nodes = new_level
         self.root = nodes[0]
 
-    def get_root_hash(self):
+    def get_root_hash(self) -> str:
         return self.root.hash if self.root else ''

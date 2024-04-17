@@ -2,8 +2,8 @@ import binascii
 import random
 from asyncio import run
 from collections import defaultdict
-import pickle
 import logging
+# import pickle
 
 from ipv8.community import Community, CommunitySettings
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
@@ -12,6 +12,7 @@ from ipv8.messaging.payload_dataclass import dataclass
 from ipv8.types import Peer
 from ipv8.util import run_forever
 from ipv8_service import IPv8
+# from typing import Type
 
 from block import Block
 
@@ -31,7 +32,8 @@ class Transaction:
 @dataclass(msg_id=2)
 class BlockMessage:
     hash: str
-    block: bytes
+    block: Block
+    ttl: int = 3
 
 class MyCommunity(Community):
     community_id = b'harbourspaceuniverse'
@@ -49,15 +51,18 @@ class MyCommunity(Community):
         self.current_block = Block('0')  # Current working block
 
         self.add_message_handler(Transaction, self.on_transaction)
-        self.add_message_handler(BlockMessage, self.on_block)
+        self.add_message_handler(BlockMessage, self.receive_block)
 
     def started(self, id) -> None:
         logging.info('Community started')
+
         # Testing purpose
         if id == 1:
-            self.register_task("tx_create", self.create_transaction, delay=1, interval=5)
-        # WIP: Check if this is the right way to check transactions
-        self.register_task("check_txs", self.check_transactions, delay=1, interval=5)
+            random_transaction_interval = random.randint(5, 10)
+            self.register_task("tx_create", self.create_transaction, delay=1, interval=random_transaction_interval)
+
+        random_check_interval = random.randint(5, 10)
+        self.register_task("check_txs", self.block_creation, delay=1, interval=random_check_interval)
 
     def peers_found(self):
         return len(self.get_peers()) > 0
@@ -93,23 +98,25 @@ class MyCommunity(Community):
         #     self.stop()
         #     return
 
-    def check_transactions(self):
-        print(f'[Node {self.get_peer_id(self.my_peer)}] Checking transactions')
-        logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Checking transactions')
 
+    def block_creation(self):
+        # WIP: get every known peer, not only the ones im connected to
+        peers = self.get_peers()
+        peers.append(self.my_peer)
+        selectedPeer = random.choice(peers)
+
+        if not selectedPeer.mid == self.my_peer.mid:
+            return
 
         for tx in self.pending_txs:
-            if self.balances[tx.sender] - tx.amount >= 0:
-                self.balances[tx.sender] -= tx.amount
-                self.balances[tx.receiver] += tx.amount
-                self.pending_txs.remove(tx)
-                self.finalized_txs.append(tx)
-                self.current_block.add_transaction(tx)
+            self.pending_txs.remove(tx)
+            self.finalized_txs.append(tx)
+            self.current_block.add_transaction(tx)
 
-                if self.current_block.is_full():
-                    print('Block is full')
-                    self.finalize_and_broadcast_block()
-                    break
+            if self.current_block.is_full():
+                print(f'[Node {self.get_peer_id(self.my_peer)}] Chosen one')
+                self.finalize_and_broadcast_block()
+                break
 
     @lazy_wrapper(Transaction)
     async def on_transaction(self, peer: Peer, payload: Transaction) -> None:
@@ -134,32 +141,37 @@ class MyCommunity(Community):
                 self.ez_send(peer, payload)
 
     @lazy_wrapper(BlockMessage)
-    async def on_block(self, peer: Peer, payload: BlockMessage) -> None:
-        unserialized_block = pickle.loads(payload.block)
-        print(unserialized_block)
+    async def receive_block(self, peer: Peer, payload: BlockMessage) -> None:
+        print('----------on block----------')
+        print(payload)
+
+        print(payload.block.previous_hash)
+        print(payload.block.merkle_hash)
+        print(payload.block.transactions)
 
         # Check if the block is already in the chain
-        if payload.hash not in [block.merkle_tree.get_root_hash() for block in self.blocks]:
-            print(f'Block {payload.hash} not in my chain {self.get_peer_id(peer)}')
-            logging.info(f'Block {payload.hash} not in my chain {self.get_peer_id(peer)}')
-            self.blocks.append(unserialized_block)
+        # if payload.hash not in [block.get_merkle_hash() for block in self.blocks]:
+        #     print(f'Block {payload.hash} not in my chain {self.get_peer_id(peer)}')
+        #     logging.info(f'Block {payload.hash} not in my chain {self.get_peer_id(peer)}')
+        #     self.blocks.append(payload.block)
 
-        # WIP: Necessary check?
-        # Check if the previous block hash is indeed the past block
+        # Remove block transactions from my pending_txs list
+        # for tx in unserialized_block.transactions:
+        #     if (tx.sender, tx.nonce) in [(tx.sender, tx.nonce) for tx in self.pending_txs]:
+        #         self.pending_txs.remove(tx)
 
     def finalize_and_broadcast_block(self):
-        self.current_block.merkle_tree.recalculate_tree()
-        new_block_hash = self.current_block.merkle_tree.get_root_hash()
+        self.current_block.update_tree()
+        new_block_hash = self.current_block.get_merkle_hash()
         print(f'New block hash: {new_block_hash}')
         logging.info(f'New block hash: {new_block_hash}')
         self.blocks.append(self.current_block)
-        serialized_block = pickle.dumps(self.current_block)
+
+        self.broadcast_block(new_block_hash, self.current_block)
         self.current_block = Block(new_block_hash)
 
-        self.broadcast_new_block(new_block_hash, serialized_block)
-
-    def broadcast_new_block(self, block_hash, serialized_block):
-        blockMessage = BlockMessage(block_hash, serialized_block)
+    def broadcast_block(self, block_hash: str, block: Block):
+        blockMessage = BlockMessage(block_hash, block)
 
         for peer in self.get_peers():
             self.ez_send(peer, blockMessage)
@@ -167,7 +179,7 @@ class MyCommunity(Community):
 
 async def start_communities() -> None:
     # We create 7 peers
-    for i in range(1, 8):
+    for i in range(1, 4):
         builder = ConfigBuilder().clear_keys().clear_overlays()
         builder.add_key("my peer", "medium", f"ec{i}.pem")
         builder.add_overlay("MyCommunity", "my peer",
