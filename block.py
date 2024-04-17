@@ -30,5 +30,5 @@ class Block(VariablePayload):
         self.merkle_tree.recalculate_tree()
         self.merkle_hash = self.merkle_tree.get_root_hash()
 
-    def get_merkle_hash(self) -> bytes:
+    def get_merkle_hash(self) -> str:
         return self.merkle_hash

@@ -54,7 +54,6 @@ class MyCommunity(Community):
         self.add_message_handler(BlockMessage, self.receive_block)
 
     def started(self, id) -> None:
-        print('Community started', self.get_peer_id(self.my_peer))
         logging.info('Community started')
 
         # Testing purpose
