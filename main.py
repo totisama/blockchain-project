@@ -157,7 +157,7 @@ class MyCommunity(Community):
     async def on_transaction(self, peer: Peer, tx: Transaction) -> None:
         my_id = self.get_peer_id(self.my_peer)
 
-        logging.info(f'[Node {my_id}] Received transaction {payload.nonce} from {self.get_peer_id(peer)}')
+        logging.info(f'[Node {my_id}] Received transaction {tx.nonce} from {self.get_peer_id(peer)}')
 
         tx_hash = self.get_tx_hash(tx)
         if tx_hash in self.finalized_txs or tx_hash in self.pending_txs:
