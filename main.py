@@ -35,6 +35,14 @@ class BlockMessage:
     block: Block
     ttl: int = 3
 
+@dataclass(msg_id=3)
+class PeersMessage:
+    mid: bytes
+    ttl: int = 3
+
+
+
+
 class MyCommunity(Community):
     community_id = b'harbourspaceuniverse'
 
@@ -50,8 +58,11 @@ class MyCommunity(Community):
         self.blocks = []  # List to store finalized blocks
         self.current_block = Block('0')  # Current working block
 
+        self.known_peers = []
+
         self.add_message_handler(Transaction, self.on_transaction)
         self.add_message_handler(BlockMessage, self.receive_block)
+        self.add_message_handler(PeersMessage, self.receive_peers)
 
     def started(self, id) -> None:
         logging.info('Community started')
@@ -63,6 +74,8 @@ class MyCommunity(Community):
 
         random_check_interval = random.randint(5, 10)
         self.register_task("check_txs", self.block_creation, delay=1, interval=random_check_interval)
+
+        self.register_task("send_peers", self.send_peers, delay=10)
 
     def peers_found(self):
         return len(self.get_peers()) > 0
@@ -176,6 +189,24 @@ class MyCommunity(Community):
         for peer in self.get_peers():
             self.ez_send(peer, blockMessage)
 
+
+    def send_peers(self) -> None:
+        peers = self.get_peers()
+        peerMessage = PeersMessage(self.my_peer.mid)
+
+        for peer in peers:
+            self.ez_send(peer, peerMessage)    
+
+
+    @lazy_wrapper(PeersMessage)
+    def receive_peers(self, peer: Peer, payload: PeersMessage) -> None:
+        self.known_peers.append(payload.mid)
+
+        peers = self.get_peers()
+        peerMessage = PeersMessage(payload.mid, payload.ttl - 1)
+
+        for peer in peers:
+            self.ez_send(peer, peerMessage)
 
 async def start_communities() -> None:
     # We create 7 peers
