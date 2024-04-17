@@ -3,41 +3,28 @@ import logging
 import random
 from asyncio import run
 from collections import defaultdict
-from hashlib import sha256
+import sys
+from typing import Dict
 
+from Crypto.PublicKey import RSA
+from cryptography.hazmat.backends import default_backend
 from ipv8.community import Community, CommunitySettings
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
+from ipv8.keyvault.keys import PublicKey
 from ipv8.lazy_community import lazy_wrapper
+from ipv8.messaging import serialization
 from ipv8.messaging.payload_dataclass import dataclass
-from ipv8.messaging.serialization import default_serializer
 from ipv8.types import Peer
 from ipv8.util import run_forever
 from ipv8_service import IPv8
 
 from block import Block
+from transaction import Transaction
 
 # Amount of peers to send message to
 k = 2
 
-logging.basicConfig(filename='blockchain.log', level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
-
-
-@dataclass(msg_id=1)  # The value 1 identifies this message and must be unique per community
-class Transaction:
-    sender: bytes
-    receiver: bytes
-    amount: int
-    nonce: int = 1
-    ttl: int = 3
-    signature: bytes
-    public_key: bytes
-
-    def get_tx_bytes(self) -> bytes:
-        tx_copy = Transaction(self.sender, self.receiver, self.amount, self.nonce)
-        return default_serializer.pack_serializable(tx_copy)
-
-    def get_tx_hash(self) -> bytes:
-        return sha256(self.get_tx_bytes()).digest()
+logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
 
 
 @dataclass(msg_id=2)
@@ -56,8 +43,8 @@ class MyCommunity(Community):
         self.max_messages = 5
         self.executed_checks = 0
 
-        self.pending_txs = {}
-        self.finalized_txs = {}
+        self.pending_txs: Dict[bytes, Transaction] = {}
+        self.finalized_txs: Dict[bytes, Transaction] = {}
         self.balances = defaultdict(lambda: 1000)
         self.blocks = []  # List to store finalized blocks
         self.current_block = Block('0')  # Current working block
@@ -82,14 +69,6 @@ class MyCommunity(Community):
     def get_peer_id(self, peer: Peer = None) -> str:
         return binascii.hexlify(peer.mid).decode()
 
-    def get_tx_hash(self, tx: Transaction) -> bytes:
-        tx_copy = Transaction(tx.sender, tx.receiver, tx.amount, tx.nonce)
-        return sha256(self.serializer.pack_serializable(tx_copy)).digest()
-
-    # def get_tx_bytes(self, tx: Transaction) -> bytes:
-    #     tx_copy = Transaction(tx.sender, tx.receiver, tx.amount, tx.nonce)
-    #     return self.serializer.pack_serializable(tx_copy)
-
     def create_transaction(self) -> None:
         if not self.peers_found():
             logging.info(f'[Node {self.get_peer_id(self.my_peer)}] No peers found')
@@ -99,13 +78,13 @@ class MyCommunity(Community):
         receiver_peer = random.choice([i for i in self.get_peers()])
 
         # ttl = 3 when creating a tx
-        tx = Transaction(self.my_peer.mid, receiver_peer.mid, 10, self.counter)
-        tx.public_key = self.my_peer.mid
+        tx = Transaction(self.my_peer.mid, receiver_peer.mid, 10, nonce=self.counter)
+        tx.public_key = self.crypto.key_to_bin(self.my_peer.key.pub())
         # should we sigh the hash of tx or the whole tx?
         tx.signature = self.crypto.create_signature(self.my_peer.key, tx.get_tx_bytes())
         logging.info(
             f'[Node {self.get_peer_id(self.my_peer)}] Sending transaction {tx.nonce} to {self.get_peer_id(receiver_peer)}')
-        self.pending_txs[self.get_tx_hash(tx)] = tx
+        self.pending_txs[tx.get_tx_hash()] = tx
         # and this is correct that initially we send this tx only to receiver?
         self.ez_send(receiver_peer, tx)
         self.counter += 1
@@ -126,8 +105,8 @@ class MyCommunity(Community):
             return
 
         logging.info(f'[Node {self.get_peer_id(self.my_peer)}] is creating a block')
-        for tx_hash, tx in self.pending_txs:
-            self.pending_txs.pop(tx_hash)
+        for tx_hash in list(self.pending_txs.keys()):
+            tx = self.pending_txs.pop(tx_hash)
             self.finalized_txs[tx_hash] = tx
             self.current_block.add_transaction(tx)
 
@@ -136,41 +115,25 @@ class MyCommunity(Community):
                 self.finalize_and_broadcast_block()
                 break
 
-    # process txs from pending_txs
-    def check_transactions(self) -> None:
-        logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Checking transactions')
-
-        for tx in self.pending_txs:
-            if self.balances[tx.sender] - tx.amount >= 0:
-                self.balances[tx.sender] -= tx.amount
-                self.balances[tx.receiver] += tx.amount
-                self.pending_txs.pop(self.get_tx_hash(tx))
-                self.finalized_txs[self.get_tx_hash(tx)] = tx
-                self.current_block.add_transaction(tx)
-            else:
-                self.pending_txs.pop(self.get_tx_hash(tx))
-
-            if self.current_block.is_full():
-                print('Block is full')
-                self.finalize_and_broadcast_block()
-                break
-
     @lazy_wrapper(Transaction)
     async def on_transaction(self, peer: Peer, tx: Transaction) -> None:
         my_id = self.get_peer_id(self.my_peer)
         logging.info(f'[Node {my_id}] received transaction {tx.nonce} from {self.get_peer_id(peer)}')
 
-        tx_hash = self.get_tx_hash(tx)
+        tx_hash = tx.get_tx_hash()
         # if we already have this tx we do nothing
         # here if we have the same txs received from different peers - we choose the one that was sent earlier?
         if tx_hash in self.finalized_txs or tx_hash in self.pending_txs:
             return
 
         # if the signature of tx is not valid we do nothing
-        if not self.crypto.is_valid_signature(tx.public_key, tx.get_tx_bytes(), tx.signature):
+        # todo need to get PublicKey object from bytes
+        if not self.crypto.is_valid_signature(self.crypto.key_from_public_bin(tx.public_key), tx.get_tx_bytes(), tx.signature):
+            logging.info(f'[Node {my_id}]: signature incorrect')
             return
 
-        self.pending_txs[self.get_tx_hash(tx)] = tx
+        logging.info(f'[Node {my_id}]: signature correct')
+        self.pending_txs[tx.get_tx_hash()] = tx
         if tx.ttl > 0:
             tx.ttl -= 1
             # push gossip to k random peers
@@ -217,7 +180,7 @@ class MyCommunity(Community):
 
 async def start_communities() -> None:
     # We create 7 peers
-    for i in range(1, 4):
+    for i in range(1, 3):
         builder = ConfigBuilder().clear_keys().clear_overlays()
         builder.add_key("my peer", "medium", f"ec{i}.pem")
         builder.add_overlay("MyCommunity", "my peer",

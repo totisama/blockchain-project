@@ -2,8 +2,8 @@ from typing import List
 
 from ipv8.messaging.lazy_payload import VariablePayload
 
-from main import Transaction
 from merkle_tree import MerkleTree
+from transaction import Transaction
 
 
 class Block(VariablePayload):
@@ -11,7 +11,7 @@ class Block(VariablePayload):
     names = ['previous_hash', 'merkle_hash', 'transactions']
 
     def __init__(self, previous_hash: str = '', merkle_hash: str = '', transactions: List[bytes] = []):
-        super().__init__()
+        # super().__init__()
         self.previous_hash = previous_hash
         self.transactions = transactions
         self.merkle_tree = MerkleTree()
