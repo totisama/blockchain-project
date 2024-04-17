@@ -17,8 +17,6 @@ class MerkleTree:
     def add_leaf(self, leaf_hash):
         new_leaf = MerkleNode(leaf_hash)
         self.leaves.append(new_leaf)
-        # Do we need to calculate the tree everytime we add a leaf?
-        # self.recalculate_tree()
 
     def recalculate_tree(self):
         nodes = self.leaves
