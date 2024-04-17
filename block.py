@@ -24,7 +24,7 @@ class Block(VariablePayload):
         self.merkle_tree.add_leaf(transaction_hash)
 
     def is_full(self):
-        return len(self.transactions) >= 2
+        return len(self.transactions) >= 10
 
     def update_tree(self):
         self.merkle_tree.recalculate_tree()
