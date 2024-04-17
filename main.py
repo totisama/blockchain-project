@@ -48,20 +48,22 @@ class MyCommunity(Community):
         self.finalized_txs = []
         self.balances = defaultdict(lambda: 1000)
         self.blocks = []  # List to store finalized blocks
-        self.current_block = Block(b'0')  # Current working block
+        self.current_block = Block('0')  # Current working block
 
         self.add_message_handler(Transaction, self.on_transaction)
-        self.add_message_handler(BlockMessage, self.on_block)
+        self.add_message_handler(BlockMessage, self.receive_block)
 
     def started(self, id) -> None:
+        print('Community started', self.get_peer_id(self.my_peer))
         logging.info('Community started')
+
         # Testing purpose
         if id == 1:
-            # random_transaction_interval = random.randint(5, 10)
-            self.register_task("tx_create", self.create_transaction, delay=1, interval=2)
+            random_transaction_interval = random.randint(5, 10)
+            self.register_task("tx_create", self.create_transaction, delay=1, interval=random_transaction_interval)
 
         random_check_interval = random.randint(5, 10)
-        self.register_task("check_txs", self.check_transactions, delay=1, interval=random_check_interval)
+        self.register_task("check_txs", self.block_creation, delay=1, interval=random_check_interval)
 
     def peers_found(self):
         return len(self.get_peers()) > 0
@@ -97,10 +99,9 @@ class MyCommunity(Community):
         #     self.stop()
         #     return
 
-    def check_transactions(self):
-        # print(f'[Node {self.get_peer_id(self.my_peer)}] Checking transactions')
-        # logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Checking transactions')
-        # WIP: get every know peer, not only the ones im connected to
+
+    def block_creation(self):
+        # WIP: get every known peer, not only the ones im connected to
         peers = self.get_peers()
         peers.append(self.my_peer)
         selectedPeer = random.choice(peers)
@@ -109,17 +110,14 @@ class MyCommunity(Community):
             return
 
         for tx in self.pending_txs:
-            if self.balances[tx.sender] - tx.amount >= 0:
-                self.balances[tx.sender] -= tx.amount
-                self.balances[tx.receiver] += tx.amount
-                self.pending_txs.remove(tx)
-                self.finalized_txs.append(tx)
-                self.current_block.add_transaction(tx)
+            self.pending_txs.remove(tx)
+            self.finalized_txs.append(tx)
+            self.current_block.add_transaction(tx)
 
-                if self.current_block.is_full():
-                    print(f'[Node {self.get_peer_id(self.my_peer)}] Chosen one')
-                    self.finalize_and_broadcast_block()
-                    break
+            if self.current_block.is_full():
+                print(f'[Node {self.get_peer_id(self.my_peer)}] Chosen one')
+                self.finalize_and_broadcast_block()
+                break
 
     @lazy_wrapper(Transaction)
     async def on_transaction(self, peer: Peer, payload: Transaction) -> None:
@@ -144,9 +142,13 @@ class MyCommunity(Community):
                 self.ez_send(peer, payload)
 
     @lazy_wrapper(BlockMessage)
-    async def on_block(self, peer: Peer, payload: BlockMessage) -> None:
+    async def receive_block(self, peer: Peer, payload: BlockMessage) -> None:
         print('----------on block----------')
         print(payload)
+
+        print(payload.block.previous_hash)
+        print(payload.block.merkle_hash)
+        print(payload.block.transactions)
 
         # Check if the block is already in the chain
         # if payload.hash not in [block.get_merkle_hash() for block in self.blocks]:
@@ -166,16 +168,11 @@ class MyCommunity(Community):
         logging.info(f'New block hash: {new_block_hash}')
         self.blocks.append(self.current_block)
 
-        logging.info(f'previous_hash: {self.current_block.previous_hash} {type(self.current_block.previous_hash)}')
-        logging.info(f'merkle_hash: {self.current_block.merkle_hash} {type(self.current_block.merkle_hash)}')
-
-        self.broadcast_new_block(new_block_hash, self.current_block)
+        self.broadcast_block(new_block_hash, self.current_block)
         self.current_block = Block(new_block_hash)
 
-    def broadcast_new_block(self, block_hash: str, serialized_block: Block):
-        print('broadcast_new_block')
-        print(serialized_block)
-        blockMessage = BlockMessage(block_hash, serialized_block)
+    def broadcast_block(self, block_hash: str, block: Block):
+        blockMessage = BlockMessage(block_hash, block)
 
         for peer in self.get_peers():
             self.ez_send(peer, blockMessage)
