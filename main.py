@@ -1,18 +1,14 @@
 import binascii
 import logging
 import random
+import sys
 from asyncio import run
 from collections import defaultdict
-import sys
 from typing import Dict
 
-from Crypto.PublicKey import RSA
-from cryptography.hazmat.backends import default_backend
 from ipv8.community import Community, CommunitySettings
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
-from ipv8.keyvault.keys import PublicKey
 from ipv8.lazy_community import lazy_wrapper
-from ipv8.messaging import serialization
 from ipv8.messaging.payload_dataclass import dataclass
 from ipv8.types import Peer
 from ipv8.util import run_forever
