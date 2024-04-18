@@ -205,7 +205,7 @@ class MyCommunity(Community):
             self.known_peers.append(payload.mid)
 
             peers = self.get_peers()
-            peerMessage = PeersMessage(self.my_peer.mid, payload.ttl - 1)
+            peerMessage = PeersMessage(payload.mid, payload.ttl - 1)
 
             for peer in peers:
                 self.ez_send(peer, peerMessage)
