@@ -58,7 +58,7 @@ class MyCommunity(Community):
         self.blocks = []  # List to store finalized blocks
         self.current_block = Block('0')  # Current working block
 
-        self.known_peers = []
+        self.known_peers = set()
 
         self.add_message_handler(Transaction, self.on_transaction)
         self.add_message_handler(BlockMessage, self.receive_block)
@@ -200,13 +200,15 @@ class MyCommunity(Community):
 
     @lazy_wrapper(PeersMessage)
     def receive_peers(self, peer: Peer, payload: PeersMessage) -> None:
-        self.known_peers.append(payload.mid)
+        if payload.mid not in self.known_peers:
 
-        peers = self.get_peers()
-        peerMessage = PeersMessage(payload.mid, payload.ttl - 1)
+            self.known_peers.append(payload.mid)
 
-        for peer in peers:
-            self.ez_send(peer, peerMessage)
+            peers = self.get_peers()
+            peerMessage = PeersMessage(self.my_peer.mid, payload.ttl - 1)
+
+            for peer in peers:
+                self.ez_send(peer, peerMessage)
 
 async def start_communities() -> None:
     # We create 7 peers
