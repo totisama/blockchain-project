@@ -63,12 +63,12 @@ class MyCommunity(Community):
         # Testing purpose
         if id == 1:
             random_transaction_interval = random.randint(5, 10)
-            self.register_task("tx_create", self.create_transaction, delay=1, interval=random_transaction_interval)
+            self.register_task("tx_create", self.create_transaction, delay=5, interval=random_transaction_interval)
 
         random_check_interval = random.randint(5, 10)
-        self.register_task("check_txs", self.block_creation, delay=1, interval=random_check_interval)
+        self.register_task("check_txs", self.block_creation, delay=5, interval=random_check_interval)
 
-        self.register_task("send_peers", self.send_peers, delay=10)
+        self.register_task("send_peers", self.send_peers, delay=5)
 
     def peers_found(self):
         return len(self.get_peers()) > 0
@@ -103,7 +103,6 @@ class MyCommunity(Community):
         #     return
 
     def block_creation(self):
-        # WIP: get every known peer, not only the ones im connected to
         random.seed(len(self.blocks))
         selectedPeer = random.choice(self.known_peers)
 
