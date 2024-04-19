@@ -58,6 +58,7 @@ class MyCommunity(Community):
 
     def started(self, id) -> None:
         logging.info('Community started')
+        self.known_peers.add(self.my_peer.mid)
 
         # Testing purpose
         if id == 1:
@@ -103,9 +104,8 @@ class MyCommunity(Community):
 
     def block_creation(self):
         # WIP: get every known peer, not only the ones im connected to
-        peers = self.get_peers()
-        peers.append(self.my_peer)
-        selectedPeer = random.choice(peers)
+        random.seed(len(self.blocks))
+        selectedPeer = random.choice(self.known_peers)
 
         if not selectedPeer.mid == self.my_peer.mid:
             return
@@ -189,14 +189,14 @@ class MyCommunity(Community):
         peerMessage = PeersMessage(self.my_peer.mid)
 
         for peer in peers:
-            self.ez_send(peer, peerMessage)    
+            self.ez_send(peer, peerMessage)
 
 
     @lazy_wrapper(PeersMessage)
     def receive_peers(self, peer: Peer, payload: PeersMessage) -> None:
         if payload.mid not in self.known_peers:
 
-            self.known_peers.append(payload.mid)
+            self.known_peers.add(payload.mid)
 
             peers = self.get_peers()
             peerMessage = PeersMessage(payload.mid, payload.ttl - 1)
@@ -211,10 +211,10 @@ async def start_communities() -> None:
         builder.add_key("my peer", "medium", f"ec{i}.pem")
         builder.add_overlay("MyCommunity", "my peer",
                             [WalkerDefinition(Strategy.RandomWalk,
-                                              10, {'timeout': 3.0})],
+                                            10, {'timeout': 3.0})],
                             default_bootstrap_defs, {}, [('started', i)])
         await IPv8(builder.finalize(),
-                   extra_communities={'MyCommunity': MyCommunity}).start()
+                extra_communities={'MyCommunity': MyCommunity}).start()
     await run_forever()
 
 
