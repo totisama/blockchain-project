@@ -18,5 +18,5 @@ class Transaction:
         tx_copy = Transaction(self.sender, self.receiver, self.amount, self.nonce)
         return default_serializer.pack_serializable(tx_copy)
 
-    def get_tx_hash(self) -> bytes:
-        return sha256(self.get_tx_bytes()).digest()
+    def get_tx_hash(self) -> str:
+        return sha256(self.get_tx_bytes()).hexdigest()
