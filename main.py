@@ -104,7 +104,7 @@ class MyCommunity(Community):
 
     def block_creation(self):
         random.seed(len(self.blocks))
-        selectedPeer = random.choice(self.known_peers)
+        selectedPeer = random.choice(list(self.known_peers))
 
         if not selectedPeer.mid == self.my_peer.mid:
             return
