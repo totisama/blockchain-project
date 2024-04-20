@@ -1,33 +1,34 @@
-import hashlib
+from typing import List
+
+from ipv8.messaging.lazy_payload import VariablePayload
 
 from merkle_tree import MerkleTree
-import pickle
+from transaction import Transaction
 
 
-class Block:
-    def __init__(self, previous_hash, transactions=None):
+class Block(VariablePayload):
+    format_list = ['varlenHutf8', 'varlenHutf8', 'varlenH-list']
+    names = ['previous_hash', 'merkle_hash', 'transactions']
+
+    def __init__(self, previous_hash: str = '', merkle_hash: str = '', transactions: List[bytes] = []):
+        # super().__init__()
         self.previous_hash = previous_hash
-        self.transactions = transactions if transactions is not None else []
+        self.transactions = transactions
         self.merkle_tree = MerkleTree()
+        self.merkle_hash = merkle_hash
 
-    def add_transaction(self, transaction):
-        self.transactions.append(transaction)
-        serialized_data = self.serialize(transaction)
-        transaction_hash = hashlib.sha256(serialized_data).hexdigest()
-        self.merkle_tree.add_leaf(transaction_hash)
+    def add_transaction(self, transaction: Transaction):
+        # We serialize the transaction before appending it to the array
+        # because there seems to be an ipv8 problem when it tries to serialize the whole array
+        self.transactions.append(transaction.get_tx_bytes())
+        self.merkle_tree.add_leaf(transaction.get_tx_hash())
 
-    def is_full(self):
+    def is_full(self) -> bool:
         return len(self.transactions) >= 10
 
-    def serialize(self, transaction) -> bytes:
-        return pickle.dumps({
-            'sender': transaction.sender,
-            'receiver': transaction.receiver,
-            'amount': transaction.amount,
-            'nonce': transaction.nonce,
-            'ttl': transaction.ttl
-        })
+    def update_tree(self):
+        self.merkle_tree.recalculate_tree()
+        self.merkle_hash = self.merkle_tree.get_root_hash()
 
-    def __reduce__(self):
-        # Customizing pickling for Block class
-        return (self.__class__, (self.previous_hash, self.merkle_tree))
+    def get_merkle_hash(self) -> str:
+        return self.merkle_hash
