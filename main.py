@@ -50,7 +50,7 @@ class MyCommunity(Community):
         self.blocks = []  # List to store finalized blocks
         self.current_block = Block('0')  # Current working block
 
-        self.known_peers = set()
+        self.known_peers_mid = set()
 
         self.add_message_handler(Transaction, self.on_transaction)
         self.add_message_handler(BlockMessage, self.receive_block)
@@ -58,7 +58,7 @@ class MyCommunity(Community):
 
     def started(self, id) -> None:
         logging.info('Community started')
-        self.known_peers.add(self.my_peer.mid)
+        self.known_peers_mid.add(self.my_peer.mid)
 
         # Testing purpose
         if id == 1:
@@ -104,9 +104,9 @@ class MyCommunity(Community):
 
     def block_creation(self):
         random.seed(len(self.blocks))
-        selectedPeer = random.choice(list(self.known_peers))
+        selected_peer_mid = random.choice(list(self.known_peers_mid))
 
-        if not selectedPeer.mid == self.my_peer.mid:
+        if not selected_peer_mid == self.my_peer.mid:
             return
 
         logging.info(f'[Node {self.get_peer_id(self.my_peer)}] is creating a block')
@@ -193,9 +193,9 @@ class MyCommunity(Community):
 
     @lazy_wrapper(PeersMessage)
     def receive_peers(self, peer: Peer, payload: PeersMessage) -> None:
-        if payload.mid not in self.known_peers:
+        if payload.mid not in self.known_peers_mid:
 
-            self.known_peers.add(payload.mid)
+            self.known_peers_mid.add(payload.mid)
 
             peers = self.get_peers()
             peerMessage = PeersMessage(payload.mid, payload.ttl - 1)
