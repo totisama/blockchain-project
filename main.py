@@ -155,9 +155,8 @@ class MyCommunity(Community):
 
         # Check block transactions and remove them from pending_txs list
         block_transactions = [self.serializer.unpack_serializable(Transaction, tx)[0] for tx in payload.block.transactions]
-        removed_txs = []
         new_balances = self.balances.copy()
-        bad_transaction = False
+        valid_txs = []
 
         for tx in block_transactions:
             tx_hash = tx.get_tx_hash()
@@ -167,16 +166,11 @@ class MyCommunity(Community):
                 new_balances[tx.receiver] += tx.amount
 
                 if tx_hash in self.pending_txs:
-                    removed_txs.append((tx_hash, self.pending_txs.pop(tx_hash)))
-            else:
-                bad_transaction = True
-                break
+                    self.pending_txs.pop(tx_hash)
 
-        if bad_transaction:
-            for tx_tuple in removed_txs:
-                self.pending_txs[tx_tuple[0]] = tx_tuple[1]
-            return
+                valid_txs.append(tx.get_tx_bytes())
 
+        payload.block.set_transactions(valid_txs)
         self.balances = new_balances
         self.blocks.append(payload.block)
 
