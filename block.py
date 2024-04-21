@@ -23,6 +23,9 @@ class Block(VariablePayload):
         self.transactions.append(transaction.get_tx_bytes())
         self.merkle_tree.add_leaf(transaction.get_tx_hash())
 
+    def set_transactions(self, transactions: List[bytes]):
+        self.transactions = transactions
+
     def is_full(self) -> bool:
         return len(self.transactions) >= 10
 
