@@ -29,6 +29,11 @@ class BlockMessage:
     block: Block
     ttl: int = 3
 
+@dataclass(msg_id=3)
+class PeersMessage:
+    mid: bytes
+    ttl: int = 3
+
 
 class MyCommunity(Community):
     community_id = b'harbourspaceuniverse'
@@ -45,19 +50,28 @@ class MyCommunity(Community):
         self.blocks = []  # List to store finalized blocks
         self.current_block = Block('0')  # Current working block
 
+        self.known_peers_mid = set()
+
         self.add_message_handler(Transaction, self.on_transaction)
         self.add_message_handler(BlockMessage, self.receive_block)
+        self.add_message_handler(PeersMessage, self.receive_peers)
+
+        # Use any number as seed
+        random.seed(21)
 
     def started(self, id) -> None:
         logging.info('Community started')
+        self.known_peers_mid.add(self.my_peer.mid)
 
         # Testing purpose
         if id == 1:
             random_transaction_interval = random.randint(5, 10)
-            self.register_task("tx_create", self.create_transaction, delay=1, interval=random_transaction_interval)
+            self.register_task("tx_create", self.create_transaction, delay=5, interval=random_transaction_interval)
 
         random_check_interval = random.randint(5, 10)
-        self.register_task("check_txs", self.block_creation, delay=1, interval=random_check_interval)
+        self.register_task("check_txs", self.block_creation, delay=5, interval=random_check_interval)
+
+        self.register_task("send_peers", self.send_peers, delay=5)
 
     def peers_found(self):
         return len(self.get_peers()) > 0
@@ -92,12 +106,9 @@ class MyCommunity(Community):
         #     return
 
     def block_creation(self):
-        # WIP: get every known peer, not only the ones im connected to
-        peers = self.get_peers()
-        peers.append(self.my_peer)
-        selectedPeer = random.choice(peers)
+        selected_peer_mid = random.choice(list(self.known_peers_mid))
 
-        if not selectedPeer.mid == self.my_peer.mid:
+        if not selected_peer_mid == self.my_peer.mid:
             return
 
         logging.info(f'[Node {self.get_peer_id(self.my_peer)}] is creating a block')
@@ -174,6 +185,26 @@ class MyCommunity(Community):
             self.ez_send(peer, blockMessage)
 
 
+    def send_peers(self) -> None:
+        peers = self.get_peers()
+        peerMessage = PeersMessage(self.my_peer.mid)
+
+        for peer in peers:
+            self.ez_send(peer, peerMessage)
+
+
+    @lazy_wrapper(PeersMessage)
+    def receive_peers(self, peer: Peer, payload: PeersMessage) -> None:
+        if payload.mid not in self.known_peers_mid:
+
+            self.known_peers_mid.add(payload.mid)
+
+            peers = self.get_peers()
+            peerMessage = PeersMessage(payload.mid, payload.ttl - 1)
+
+            for peer in peers:
+                self.ez_send(peer, peerMessage)
+
 async def start_communities() -> None:
     # We create 7 peers
     for i in range(1, 3):
@@ -181,10 +212,10 @@ async def start_communities() -> None:
         builder.add_key("my peer", "medium", f"ec{i}.pem")
         builder.add_overlay("MyCommunity", "my peer",
                             [WalkerDefinition(Strategy.RandomWalk,
-                                              10, {'timeout': 3.0})],
+                                            10, {'timeout': 3.0})],
                             default_bootstrap_defs, {}, [('started', i)])
         await IPv8(builder.finalize(),
-                   extra_communities={'MyCommunity': MyCommunity}).start()
+                extra_communities={'MyCommunity': MyCommunity}).start()
     await run_forever()
 
 
