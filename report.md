@@ -16,6 +16,7 @@
 - Rodrigo Samayoa
 - Claudio Foti
 - Md Abuzar
+- Stepa Spiridonov
 
 ### Benchmarks
  - Benchmarking Latency
