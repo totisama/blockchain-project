@@ -13,11 +13,13 @@
 
 ### Members:
 
--
 - Rodrigo Samayoa
 - Claudio Foti
+- Md Abuzar
 
 ### Benchmarks
+ - Benchmarking Latency
+ - benchmarking Throughput
 
 ### Tests
 
