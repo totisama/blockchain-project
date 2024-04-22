@@ -15,7 +15,14 @@
 
 -
 - Rodrigo Samayoa
+- Claudio Foti
 
 ### Benchmarks
 
 ### Tests
+
+Testing of:
+- Transaction creation and broadcasting
+- Transaction reception
+- Transaction gossiping
+- Block creation and broadcasting
