@@ -166,7 +166,7 @@ class MyCommunity(Community):
                 new_balances[tx.sender] -= tx. amount
                 new_balances[tx.receiver] += tx.amount
 
-                if tx_hash in list(self.pending_txs.keys()):
+                if tx_hash in self.pending_txs.keys():
                     self.pending_txs.pop(tx_hash)
 
                 valid_txs.append(tx.get_tx_bytes())
