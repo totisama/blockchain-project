@@ -213,6 +213,8 @@ class MyCommunity(Community):
 
             self.known_peers_mid.add(payload.mid)
 
+            self.known_peers_mid = set(sorted(list(self.known_peers_mid)))
+
             peers = self.get_peers()
             peerMessage = PeersMessage(payload.mid, payload.ttl - 1)
 
