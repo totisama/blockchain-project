@@ -1,6 +1,7 @@
 import binascii
 import logging
-import random
+import random as random
+import random as random2
 import sys
 from asyncio import run
 from collections import defaultdict
@@ -56,8 +57,6 @@ class MyCommunity(Community):
         self.add_message_handler(BlockMessage, self.receive_block)
         self.add_message_handler(PeersMessage, self.receive_peers)
 
-        # Use any number as seed
-        random.seed(21)
 
     def started(self, id) -> None:
         logging.info('Community started')
@@ -68,8 +67,8 @@ class MyCommunity(Community):
         random_transaction_interval = random.randint(5, 10)
         self.register_task("tx_create", self.create_transaction, delay=7, interval=random_transaction_interval)
 
-        random_check_interval = random.randint(5, 10)
-        self.register_task("check_txs", self.block_creation, delay=7, interval=random_check_interval)
+        # random_check_interval = random.randint(5, 10)
+        self.register_task("check_txs", self.block_creation, delay=7, interval=5)
 
         self.register_task("send_peers", self.send_peers, delay=5)
 
@@ -85,7 +84,7 @@ class MyCommunity(Community):
             return
 
         # logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Creating transaction')
-        receiver_peer = random.choice([i for i in self.get_peers()])
+        receiver_peer = random2.choice([i for i in self.get_peers()])
 
         # ttl = 3 when creating a tx
         tx = Transaction(self.my_peer.mid, receiver_peer.mid, 10, nonce=self.counter)
@@ -101,12 +100,13 @@ class MyCommunity(Community):
 
 
     def block_creation(self):
+        # WIP: use hash of 2 or 3 previous block as seed
+        random.seed(len(self.blocks))
         selected_peer_mid = random.choice(list(self.known_peers_mid))
 
         if not selected_peer_mid == self.my_peer.mid:
             return
 
-        # logging.info(f'[Node {self.get_peer_id(self.my_peer)}] is creating a block')
         for tx_hash in list(self.pending_txs.keys()):
             tx = self.pending_txs.pop(tx_hash)
             self.finalized_txs[tx_hash] = tx
@@ -135,17 +135,17 @@ class MyCommunity(Community):
             return
 
         logging.info(f'[Node {my_id}]: signature correct')
-        self.pending_txs[tx.get_tx_hash()] = tx
+        self.pending_txs[tx_hash] = tx
         if tx.ttl > 0:
             tx.ttl -= 1
             # push gossip to k random peers
-            get_peers_to_distribute = random.sample(self.get_peers(), min(k, len(self.get_peers())))
+            get_peers_to_distribute = random2.sample(self.get_peers(), min(k, len(self.get_peers())))
             for peer in get_peers_to_distribute:
                 self.ez_send(peer, tx)
 
     @lazy_wrapper(BlockMessage)
     async def receive_block(self, peer: Peer, payload: BlockMessage) -> None:
-        logging.info('----------on block----------')
+        logging.info(f'[Node {self.get_peer_id(self.my_peer)}] ----------on block----------')
 
         # If the block is already our chain we do nothing
         if payload.hash in [block.get_merkle_hash() for block in self.blocks]:
@@ -165,7 +165,7 @@ class MyCommunity(Community):
                 new_balances[tx.sender] -= tx. amount
                 new_balances[tx.receiver] += tx.amount
 
-                if tx_hash in self.pending_txs:
+                if tx_hash in self.pending_txs.keys():
                     self.pending_txs.pop(tx_hash)
 
                 valid_txs.append(tx.get_tx_bytes())
@@ -177,7 +177,7 @@ class MyCommunity(Community):
         if payload.ttl > 0:
             payload.ttl -= 1
 
-            get_peers_to_distribute = random.sample(self.get_peers(), min(k, len(self.get_peers())))
+            get_peers_to_distribute = random2.sample(self.get_peers(), min(k, len(self.get_peers())))
             for peer in get_peers_to_distribute:
                 self.ez_send(peer, payload)
 
@@ -185,7 +185,7 @@ class MyCommunity(Community):
         self.current_block.update_tree()
         new_block_hash = self.current_block.get_merkle_hash()
         # logging.info(f'New block hash: {new_block_hash}')
-        self.blocks.append(self.current_block)
+        # self.blocks.append(self.current_block)
 
         self.broadcast_block(new_block_hash, self.current_block)
         self.current_block = Block(new_block_hash)
@@ -210,6 +210,8 @@ class MyCommunity(Community):
         if payload.mid not in self.known_peers_mid:
 
             self.known_peers_mid.add(payload.mid)
+
+            self.known_peers_mid = set(sorted(list(self.known_peers_mid)))
 
             peers = self.get_peers()
             peerMessage = PeersMessage(payload.mid, payload.ttl - 1)
