@@ -29,3 +29,5 @@ Testing of:
 - Transaction reception
 - Transaction gossiping
 - Block creation and broadcasting
+
+Tests are located in the feat/testing branch in the test_community.py file.
