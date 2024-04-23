@@ -1,6 +1,7 @@
 import binascii
 import logging
-import random
+import random as random
+import random as random2
 import sys
 from asyncio import run
 from collections import defaultdict
@@ -83,8 +84,7 @@ class MyCommunity(Community):
             return
 
         # logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Creating transaction')
-        random.seed()
-        receiver_peer = random.choice([i for i in self.get_peers()])
+        receiver_peer = random2.choice([i for i in self.get_peers()])
 
         # ttl = 3 when creating a tx
         tx = Transaction(self.my_peer.mid, receiver_peer.mid, 10, nonce=self.counter)
@@ -139,8 +139,7 @@ class MyCommunity(Community):
         if tx.ttl > 0:
             tx.ttl -= 1
             # push gossip to k random peers
-            random.seed()
-            get_peers_to_distribute = random.sample(self.get_peers(), min(k, len(self.get_peers())))
+            get_peers_to_distribute = random2.sample(self.get_peers(), min(k, len(self.get_peers())))
             for peer in get_peers_to_distribute:
                 self.ez_send(peer, tx)
 
@@ -178,8 +177,7 @@ class MyCommunity(Community):
         if payload.ttl > 0:
             payload.ttl -= 1
 
-            random.seed()
-            get_peers_to_distribute = random.sample(self.get_peers(), min(k, len(self.get_peers())))
+            get_peers_to_distribute = random2.sample(self.get_peers(), min(k, len(self.get_peers())))
             for peer in get_peers_to_distribute:
                 self.ez_send(peer, payload)
 
