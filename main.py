@@ -5,7 +5,7 @@ import random as random2
 import sys
 from asyncio import run
 from collections import defaultdict
-from typing import Dict
+from typing import Dict,Tuple
 
 from ipv8.community import Community, CommunitySettings
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
@@ -18,10 +18,16 @@ from ipv8_service import IPv8
 from block import Block
 from transaction import Transaction
 
+import time
+
 # Amount of peers to send message to
 k = 2
 
-logging.basicConfig(stream=sys.stdout, level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s')
+logfile = 'logfile.log'
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s',handlers=[
+        logging.StreamHandler(),  # Log to stdout
+        logging.FileHandler(logfile)  # Log to a file
+    ])
 
 
 @dataclass(msg_id=2)
@@ -46,6 +52,8 @@ class MyCommunity(Community):
         self.executed_checks = 0
 
         self.pending_txs: Dict[bytes, Transaction] = {}
+        # self.pending_txs: Dict[bytes, Tuple[Transaction, float]] = {}
+
         self.finalized_txs: Dict[bytes, Transaction] = {}
         self.balances = defaultdict(lambda: 1000)
         self.blocks = []  # List to store finalized blocks
@@ -85,6 +93,9 @@ class MyCommunity(Community):
 
         # logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Creating transaction')
         receiver_peer = random2.choice([i for i in self.get_peers()])
+
+        # Record the timestamp just before sending the transaction
+        send_time = time.time()
 
         # ttl = 3 when creating a tx
         tx = Transaction(self.my_peer.mid, receiver_peer.mid, 10, nonce=self.counter)
