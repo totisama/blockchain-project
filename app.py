@@ -28,20 +28,15 @@ ipv8_instance = run(create_community())
 run(start_community(ipv8_instance))
 community = ipv8_instance.overlays[0]
 
-print(community.my_peer.mid)
-print(community.community_id)
-print(community.get_peers())
 
-
-def onclickbtn():
+def create_transaction():
     tx = community.create_transaction()
     if tx is not None:
         st.write(tx.sender)
 
 
 st.write("""
-# My first app
-Hello *world!*
+# Test app
 """)
 
-st.button("Test", on_click=onclickbtn)
+st.button("Create transaction", on_click=create_transaction)
