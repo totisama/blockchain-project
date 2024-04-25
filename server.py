@@ -5,18 +5,6 @@ import uvicorn
 # Create web server
 app = FastAPI()
 
-
-@app.get("/get-transactions/{node_port}")
-async def get_transactions(node_port: int):
-    ipv8_instance = app.ipv8_instance
-    transactions = ipv8_instance.overlays[0].finalized_txs
-    print(transactions, len(transactions))
-
-    if not ipv8_instance:
-        raise HTTPException(status_code=404, detail="IPv8 instance not found")
-
-    return {"status": "OK", "transactions-made": len(transactions)}
-
 @app.get("/get-peers")
 async def get_peers():
     ipv8_instance = app.ipv8_instance
@@ -26,30 +14,6 @@ async def get_peers():
         raise HTTPException(status_code=404, detail="IPv8 instance not found")
 
     return {"status": "OK", "number-of-peers": len(node.get_peers())}
-
-
-@app.post("/send-message/{node_port}")
-async def send_message(node_port: int):
-    ipv8_instance = app.ipv8_instance
-
-    print('IF YOU SEE THIS. THIS WORKED', ipv8_instance.overlays[0].counter)
-    ipv8_instance.overlays[0].on_web_start()
-    # ipv8_instance.overlays[0].start_client()
-
-    if not ipv8_instance:
-        raise HTTPException(status_code=404, detail="IPv8 instance not found")
-
-    return {"status": "OK"}
-
-    # Access the BlockchainNode community from your IPv8 instance
-    blockchain_node = ipv8_instance.overlay[0]
-    print(blockchain_node)
-
-    if success:
-        return {"status": "Transaction sent"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to send transaction")
-
 
 def run_web_server(ipv8_instance):
     app.ipv8_instance = ipv8_instance
