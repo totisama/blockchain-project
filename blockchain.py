@@ -27,6 +27,7 @@ class BlockMessage:
     block: Block
     ttl: int = 3
 
+
 @dataclass(msg_id=3)
 class PeersMessage:
     mid: bytes
@@ -54,7 +55,6 @@ class MyCommunity(Community):
         self.add_message_handler(BlockMessage, self.receive_block)
         self.add_message_handler(PeersMessage, self.receive_peers)
 
-
     def started(self, id) -> None:
         logging.info('Community started')
         self.known_peers_mid.add(self.my_peer.mid)
@@ -74,6 +74,7 @@ class MyCommunity(Community):
 
     def get_peer_id(self, peer: Peer = None) -> str:
         return binascii.hexlify(peer.mid).decode()
+
     def log_get_peers(self):
         logging.info(f'[Id] {self.community_id}')
         logging.info(f'[Nodes] {len(self.get_peers())} peers found')
@@ -101,7 +102,6 @@ class MyCommunity(Community):
         print("ASDSADAS")
 
         return tx
-
 
     def block_creation(self):
         # WIP: use hash of 2 or 3 previous block as seed
@@ -134,7 +134,8 @@ class MyCommunity(Community):
 
         # if the signature of tx is not valid we do nothing
         # todo need to get PublicKey object from bytes
-        if not self.crypto.is_valid_signature(self.crypto.key_from_public_bin(tx.public_key), tx.get_tx_bytes(), tx.signature):
+        if not self.crypto.is_valid_signature(self.crypto.key_from_public_bin(tx.public_key), tx.get_tx_bytes(),
+                                              tx.signature):
             logging.info(f'[Node {my_id}]: signature incorrect')
             return
 
@@ -158,7 +159,8 @@ class MyCommunity(Community):
             return
 
         # Check block transactions and remove them from pending_txs list
-        block_transactions = [self.serializer.unpack_serializable(Transaction, tx)[0] for tx in payload.block.transactions]
+        block_transactions = [self.serializer.unpack_serializable(Transaction, tx)[0] for tx in
+                              payload.block.transactions]
         new_balances = self.balances.copy()
         valid_txs = []
 
@@ -166,7 +168,7 @@ class MyCommunity(Community):
             tx_hash = tx.get_tx_hash()
 
             if new_balances[tx.sender] - tx.amount >= 0:
-                new_balances[tx.sender] -= tx. amount
+                new_balances[tx.sender] -= tx.amount
                 new_balances[tx.receiver] += tx.amount
 
                 if tx_hash in self.pending_txs.keys():
@@ -200,14 +202,12 @@ class MyCommunity(Community):
         for peer in self.get_peers():
             self.ez_send(peer, blockMessage)
 
-
     def send_peers(self) -> None:
         peers = self.get_peers()
         peerMessage = PeersMessage(self.my_peer.mid)
 
         for peer in peers:
             self.ez_send(peer, peerMessage)
-
 
     @lazy_wrapper(PeersMessage)
     def receive_peers(self, peer: Peer, payload: PeersMessage) -> None:

@@ -228,24 +228,12 @@ class MyCommunity(Community):
         # Check block transactions and remove them from pending_txs list
         block_transactions = [self.serializer.unpack_serializable(Transaction, tx)[0] for tx in
                             payload.block.transactions]
-        new_balances = self.balances.copy()
-        # valid_txs = []
 
         # TODO: We should validate transactions at this point?
         for tx in block_transactions:
             tx_hash = tx.get_tx_hash()
+            self.finalized_txs[tx_hash] = self.pending_txs.pop(tx_hash)
 
-        #     if new_balances[tx.sender] - tx.amount >= 0:
-        #         new_balances[tx.sender] -= tx.amount
-        #         new_balances[tx.receiver] += tx.amount
-
-        #         if tx_hash in self.pending_txs.keys():
-        #             self.pending_txs.pop(tx_hash)
-
-        #         valid_txs.append(tx.get_tx_bytes())
-
-        # payload.block.set_transactions(valid_txs)
-        self.balances = new_balances
         self.blocks.append(payload.block)
 
         if payload.ttl > 0:
