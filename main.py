@@ -2,23 +2,23 @@ import binascii
 import logging
 import random as random
 import random as random2
-import sys
+import time
 from asyncio import run
 from collections import defaultdict
-from typing import Dict,Tuple
+from typing import Dict
 
 from ipv8.community import Community, CommunitySettings
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
 from ipv8.lazy_community import lazy_wrapper
 from ipv8.messaging.payload_dataclass import dataclass
+from ipv8.messaging.serialization import default_serializer
 from ipv8.types import Peer
 from ipv8.util import run_forever
 from ipv8_service import IPv8
 
 from block import Block
+from block_request import BlockRequest, BlockResponse
 from transaction import Transaction
-
-import time
 
 # Amount of peers to send message to
 k = 2
@@ -29,12 +29,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(mes
         logging.FileHandler(logfile, mode='w')  # Log to a file
     ])
 
-
 @dataclass(msg_id=2)
 class BlockMessage:
     hash: str
     block: Block
     ttl: int = 3
+    signature: bytes = b''
+    public_key: bytes = b''
+
+    def get_block_bytes(self) -> bytes:
+        return default_serializer.pack_serializable(self.block)
+
 
 @dataclass(msg_id=3)
 class PeersMessage:
@@ -51,10 +56,9 @@ class MyCommunity(Community):
         self.max_messages = 5
         self.executed_checks = 0
 
-        self.pending_txs: Dict[bytes, Transaction] = {}
-        # self.pending_txs: Dict[bytes, Tuple[Transaction, float]] = {}
+        self.pending_txs: Dict[str, Transaction] = {}
+        self.finalized_txs: Dict[str, Transaction] = {}
 
-        self.finalized_txs: Dict[bytes, Transaction] = {}
         self.balances = defaultdict(lambda: 1000)
         self.blocks = []  # List to store finalized blocks
         self.current_block = Block('0')  # Current working block
@@ -64,9 +68,10 @@ class MyCommunity(Community):
         self.add_message_handler(Transaction, self.on_transaction)
         self.add_message_handler(BlockMessage, self.receive_block)
         self.add_message_handler(PeersMessage, self.receive_peers)
+        self.add_message_handler(BlockRequest, self.on_block_request)
+        self.add_message_handler(BlockResponse, self.on_block_response)
 
-
-    def started(self, id) -> None:
+    def started(self) -> None:
         logging.info('Community started')
         self.known_peers_mid.add(self.my_peer.mid)
 
@@ -97,10 +102,8 @@ class MyCommunity(Community):
         # Record the timestamp just before sending the transaction
         send_time = time.time()
 
-        # ttl = 3 when creating a tx
         tx = Transaction(self.my_peer.mid, receiver_peer.mid, 10, nonce=self.counter)
         tx.public_key = self.crypto.key_to_bin(self.my_peer.key.pub())
-        # should we sigh the hash of tx or the whole tx?
         tx.signature = self.crypto.create_signature(self.my_peer.key, tx.get_tx_bytes())
         # logging.info(
         #     f'[Node {self.get_peer_id(self.my_peer)}] Sending transaction {tx.nonce} to {self.get_peer_id(receiver_peer)}')
@@ -108,7 +111,6 @@ class MyCommunity(Community):
         # and this is correct that initially we send this tx only to receiver?
         self.ez_send(receiver_peer, tx)
         self.counter += 1
-
 
     def block_creation(self):
         # WIP: use hash of 2 or 3 previous block as seed
@@ -140,12 +142,12 @@ class MyCommunity(Community):
             return
 
         # if the signature of tx is not valid we do nothing
-        # todo need to get PublicKey object from bytes
-        if not self.crypto.is_valid_signature(self.crypto.key_from_public_bin(tx.public_key), tx.get_tx_bytes(), tx.signature):
-            logging.info(f'[Node {my_id}]: signature incorrect')
+        if not self.crypto.is_valid_signature(self.crypto.key_from_public_bin(tx.public_key), tx.get_tx_bytes(),
+                                              tx.signature):
+            logging.info(f'[Node {my_id}]: tx signature incorrect')
             return
 
-        logging.info(f'[Node {my_id}]: signature correct')
+        logging.info(f'[Node {my_id}]: tx signature correct')
         self.pending_txs[tx_hash] = tx
         if tx.ttl > 0:
             tx.ttl -= 1
@@ -154,18 +156,53 @@ class MyCommunity(Community):
             for peer in get_peers_to_distribute:
                 self.ez_send(peer, tx)
 
+    @lazy_wrapper(BlockRequest)
+    async def on_block_request(self, peer: Peer, block_request: BlockRequest) -> None:
+        my_id = self.get_peer_id(self.my_peer)
+        logging.info(
+            f'[Node {my_id}]: received block request with hash {block_request.block_hash} from {self.get_peer_id(peer)}')
+        for block in self.blocks:
+            if block.merkle_hash == block_request.block_hash:
+                self.ez_send(peer, BlockResponse(block))
+
+    @lazy_wrapper(BlockResponse)
+    async def on_block_response(self, peer: Peer, block_response: BlockResponse) -> None:
+        my_id = self.get_peer_id(self.my_peer)
+        logging.info(
+            f'[Node {my_id}]: received block response with hash {block_response.block.merkle_hash} from {self.get_peer_id(peer)}')
+        for i, block in enumerate(self.blocks):
+            if block.merkle_hash == block_response.block.previous_hash:
+                self.blocks.insert(i + 1, block_response.block)
+                return
+
     @lazy_wrapper(BlockMessage)
     async def receive_block(self, peer: Peer, payload: BlockMessage) -> None:
         logging.info(f'[Node {self.get_peer_id(self.my_peer)}] ----------on block----------')
 
-        # If the block is already our chain we do nothing
+        # stateless check
+        my_id = self.get_peer_id(self.my_peer)
+        if not self.crypto.is_valid_signature(self.crypto.key_from_public_bin(payload.public_key),
+                                              payload.get_block_bytes(), payload.signature):
+            logging.info(f'[Node {my_id}]: block signature incorrect')
+            return
+        logging.info(f'[Node {my_id}]: block signature correct')
+
+        if payload.block.previous_hash not in [block.get_merkle_hash() for block in self.blocks]:
+            logging.info(f'[Node {my_id}]: requesting prev block')
+            # we don't know the prev block so we should request it
+            self.ez_send(peer, BlockRequest(payload.block.previous_hash))
+            return
+
+        # stateful check
+        # If the block is already in our chain we do nothing
         if payload.hash in [block.get_merkle_hash() for block in self.blocks]:
-            logging.info('block already known')
+            logging.info(f'[Node {my_id}]: block already known')
 
             return
 
         # Check block transactions and remove them from pending_txs list
-        block_transactions = [self.serializer.unpack_serializable(Transaction, tx)[0] for tx in payload.block.transactions]
+        block_transactions = [self.serializer.unpack_serializable(Transaction, tx)[0] for tx in
+                              payload.block.transactions]
         new_balances = self.balances.copy()
         valid_txs = []
 
@@ -173,7 +210,7 @@ class MyCommunity(Community):
             tx_hash = tx.get_tx_hash()
 
             if new_balances[tx.sender] - tx.amount >= 0:
-                new_balances[tx.sender] -= tx. amount
+                new_balances[tx.sender] -= tx.amount
                 new_balances[tx.receiver] += tx.amount
 
                 if tx_hash in self.pending_txs.keys():
@@ -203,10 +240,12 @@ class MyCommunity(Community):
 
     def broadcast_block(self, block_hash: str, block: Block):
         blockMessage = BlockMessage(block_hash, block)
+        blockMessage.public_key = self.crypto.key_to_bin(self.my_peer.key.pub())
+        # should we sigh the hash of tx or the whole tx?
+        blockMessage.signature = self.crypto.create_signature(self.my_peer.key, blockMessage.get_block_bytes())
 
         for peer in self.get_peers():
             self.ez_send(peer, blockMessage)
-
 
     def send_peers(self) -> None:
         peers = self.get_peers()
@@ -214,7 +253,6 @@ class MyCommunity(Community):
 
         for peer in peers:
             self.ez_send(peer, peerMessage)
-
 
     @lazy_wrapper(PeersMessage)
     def receive_peers(self, peer: Peer, payload: PeersMessage) -> None:
@@ -230,17 +268,18 @@ class MyCommunity(Community):
             for peer in peers:
                 self.ez_send(peer, peerMessage)
 
+
 async def start_communities() -> None:
     # We create 7 peers
-    for i in range(1,5):
+    for i in range(1, 3):
         builder = ConfigBuilder().clear_keys().clear_overlays()
         builder.add_key("my peer", "medium", f"ec{i}.pem")
         builder.add_overlay("MyCommunity", "my peer",
                             [WalkerDefinition(Strategy.RandomWalk,
-                                            10, {'timeout': 3.0})],
-                            default_bootstrap_defs, {}, [('started', i)])
+                                              10, {'timeout': 3.0})],
+                            default_bootstrap_defs, {}, [('started',)])
         await IPv8(builder.finalize(),
-                extra_communities={'MyCommunity': MyCommunity}).start()
+                   extra_communities={'MyCommunity': MyCommunity}).start()
     await run_forever()
 
 
