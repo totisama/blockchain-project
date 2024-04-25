@@ -101,19 +101,19 @@ class MyCommunity(Community):
         if not topic or not option:
             return {"error": "Missing information"}
 
-        if not self.votes[topic]:
+        if topic not in self.votes.keys():
             self.votes[topic] = {}
 
-        if not self.votes[topic][option]:
+        if option not in self.votes[topic].keys():
             self.votes[topic][option] = 0
 
         self.votes[topic][option] += 1
 
-        if not self.voted[self.my_peer.mid]:
+        if self.my_peer.mid not in self.voted.keys():
             self.voted[self.my_peer.mid] = {}
 
         # If I already voted for this topic, I don't create a new transaction
-        if self.voted[self.my_peer.mid][topic]:
+        if topic in self.voted[self.my_peer.mid].keys():
             return {"error": "Already voted for this topic"}
         else:
             self.voted[self.my_peer.mid][topic] = True
@@ -122,7 +122,7 @@ class MyCommunity(Community):
         receiver_peer = random2.choice([i for i in self.get_peers()])
 
         # Record the timestamp just before sending the transaction
-        send_time = time.time()
+        # send_time = time.time()
 
         tx = Transaction(self.my_peer.mid, topic, option, nonce=self.counter)
         tx.public_key = self.crypto.key_to_bin(self.my_peer.key.pub())
@@ -133,6 +133,8 @@ class MyCommunity(Community):
         # and this is correct that initially we send this tx only to receiver?
         self.ez_send(receiver_peer, tx)
         self.counter += 1
+
+        return self.votes[topic]
 
     def block_creation(self):
         # WIP: use hash of 2 or 3 previous block as seed
