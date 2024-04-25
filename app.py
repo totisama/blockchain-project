@@ -66,6 +66,22 @@ def load_proposal_page(proposal):
     st.rerun()
 
 
+def refresh_votes(topic):
+    topic = str(topic).replace(" ", "")
+    print('topic', topic)
+    response = requests.get(f"http://127.0.0.1:8000/votes/{topic}").json()
+    print('response', response)
+
+    results = {option: 0 for option in st.session_state.current_proposal["options"]}
+    votes_amount = 0
+    if "response" in response.keys():
+        for option in response["response"].keys():
+            results[option] = response["response"][option]
+            votes_amount += response["response"][option]
+    print('votes_amount1', votes_amount)
+    st.session_state.votes_amount = votes_amount
+    st.session_state.current_proposal["results"] = results
+    st.rerun()
 
 # Proposal detail and voting form
 
@@ -91,6 +107,8 @@ def proposal_page():
 
     if "results" in proposal:
         st.subheader("Voting Results")
+        if st.button("Refresh votes", type="secondary"):
+            refresh_votes(proposal['title'])
         if st.session_state.votes_amount == 0:
             st.write("No votes yet")
             return
@@ -119,6 +137,7 @@ def send_vote(topic, vote):
         response = requests.get(f"http://127.0.0.1:8000/votes/{topic}").json()
     else:
         st.success("Vote registered successfully")
+    print('response', response)
 
     results = {option: 0 for option in st.session_state.current_proposal["options"]}
     votes_amount = 0
@@ -126,6 +145,7 @@ def send_vote(topic, vote):
         for option in response["response"].keys():
             results[option] = response["response"][option]
             votes_amount += response["response"][option]
+    print('votes_amount', votes_amount)
     st.session_state.votes_amount = votes_amount
     st.session_state.current_proposal["results"] = results
     st.rerun()
