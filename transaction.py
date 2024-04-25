@@ -1,6 +1,5 @@
 from hashlib import sha256
 
-from ipv8.messaging.lazy_payload import VariablePayload
 from ipv8.messaging.payload_dataclass import dataclass
 from ipv8.messaging.serialization import default_serializer
 
@@ -10,14 +9,12 @@ class Transaction:
     sender: bytes
     topic: str
     vote: str
-    # TODO: Do we need nonce now?
-    nonce: int = 1
     ttl: int = 3
     signature: bytes = b''
     public_key: bytes = b''
 
     def get_tx_bytes(self) -> bytes:
-        tx_copy = Transaction(self.sender, self.topic, self.vote, self.nonce)
+        tx_copy = Transaction(self.sender, self.topic, self.vote)
         return default_serializer.pack_serializable(tx_copy)
 
     def get_tx_hash(self) -> str:

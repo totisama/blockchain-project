@@ -1,8 +1,8 @@
 import unittest
 from ipv8.test.base import TestBase
-from ipv8.messaging.payload import Payload
-from main import MyCommunity, Transaction, BlockMessage
 from block import Block
+from blockchain import MyCommunity, BlockMessage
+from transaction import Transaction
 
 
 class TestBlockchain(unittest.TestCase):

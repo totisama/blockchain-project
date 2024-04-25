@@ -129,13 +129,10 @@ class MyCommunity(Community):
         # Record the timestamp just before sending the transaction
         # send_time = time.time()
 
-        tx = Transaction(self.my_peer.mid, topic, option, nonce=self.counter)
+        tx = Transaction(self.my_peer.mid, topic, option)
         tx.public_key = self.crypto.key_to_bin(self.my_peer.key.pub())
         tx.signature = self.crypto.create_signature(self.my_peer.key, tx.get_tx_bytes())
-        # logging.info(
-        #     f'[Node {self.get_peer_id(self.my_peer)}] Sending transaction {tx.nonce} to {self.get_peer_id(receiver_peer)}')
         self.pending_txs[tx.get_tx_hash()] = tx
-        # and this is correct that initially we send this tx only to receiver?
         self.ez_send(receiver_peer, tx)
         self.counter += 1
 
@@ -162,11 +159,10 @@ class MyCommunity(Community):
     @lazy_wrapper(Transaction)
     async def on_transaction(self, peer: Peer, tx: Transaction) -> None:
         my_id = self.get_peer_id(self.my_peer)
-        logging.info(f'[Node {my_id}] received transaction {tx.nonce} from {self.get_peer_id(peer)}')
+        logging.info(f'[Node {my_id}] received transaction from {self.get_peer_id(peer)}')
 
         tx_hash = tx.get_tx_hash()
         # if we already have this tx we do nothing
-        # here if we have the same txs received from different peers - we choose the one that was sent earlier?
         if tx_hash in self.finalized_txs or tx_hash in self.pending_txs:
             return
 
@@ -183,10 +179,10 @@ class MyCommunity(Community):
 
         self.voted[tx.sender][tx.topic] = True
 
-        if tx.option not in self.votes[tx.topic].keys():
-            self.votes[tx.topic][tx.option] = 0
+        if tx.vote not in self.votes[tx.topic].keys():
+            self.votes[tx.topic][tx.vote] = 0
 
-        self.votes[tx.topic][tx.option] += 1
+        self.votes[tx.topic][tx.vote] += 1
 
         self.pending_txs[tx_hash] = tx
         if tx.ttl > 0:
