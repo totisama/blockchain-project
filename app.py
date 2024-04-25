@@ -61,7 +61,7 @@ def home_page():
 def load_proposal_page(proposal):
     st.session_state.current_proposal = proposal
     st.session_state.page = "Proposal" 
-    st.experimental_rerun()
+    st.rerun()
 
 
 
@@ -72,7 +72,7 @@ def proposal_page():
     if st.button("Back"):
         st.session_state.current_proposal = None
         st.session_state.page = "Home" 
-        st.experimental_rerun()
+        st.rerun()
     if proposal["status"] == "active":
         st.caption(":green[Active]")
     else:
@@ -100,7 +100,7 @@ def record_vote(vote):
     results = {option: 0 for option in st.session_state.current_proposal["options"]}
     results[vote] += 100 
     st.session_state.current_proposal["results"] = results
-    st.experimental_rerun()
+    st.rerun()
 
 
 
