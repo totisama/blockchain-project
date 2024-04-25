@@ -55,6 +55,10 @@ class MyCommunity(Community):
         self.counter = 1
         self.max_messages = 5
         self.executed_checks = 0
+        # self.votes = { 'topic1': { 'yes': 0, 'no': 0 }, 'topic2': { 'yes': 0, 'no': 0 } }
+        # self.voted = { 'peer1': { 'topic1': False, 'topic2': False }, 'peer2': { 'topic1': False, 'topic2': False }}
+        self.votes = {}
+        self.voted = {}
 
         self.pending_txs: Dict[str, Transaction] = {}
         self.finalized_txs: Dict[str, Transaction] = {}
@@ -91,10 +95,30 @@ class MyCommunity(Community):
     def get_peer_id(self, peer: Peer = None) -> str:
         return binascii.hexlify(peer.mid).decode()
 
-    def create_transaction(self) -> None:
+    def create_transaction(self, topic: str = '', option: str = '') -> None:
         if not self.peers_found():
             logging.info(f'[Node {self.get_peer_id(self.my_peer)}] No peers found')
             return
+
+        if not topic or not option:
+            return {"error": "Missing information"}
+
+        if not self.votes[topic]:
+            self.votes[topic] = {}
+
+        if not self.votes[topic][option]:
+            self.votes[topic][option] = 0
+
+        self.votes[topic][option] += 1
+
+        if not self.voted[self.my_peer.mid]:
+            self.voted[self.my_peer.mid] = {}
+
+        # If I already voted for this topic, I don't create a new transaction
+        if self.voted[self.my_peer.mid][topic]:
+            return {"error": "Already voted for this topic"}
+        else:
+            self.voted[self.my_peer.mid][topic] = True
 
         # logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Creating transaction')
         receiver_peer = random2.choice([i for i in self.get_peers()])
@@ -102,7 +126,7 @@ class MyCommunity(Community):
         # Record the timestamp just before sending the transaction
         send_time = time.time()
 
-        tx = Transaction(self.my_peer.mid, receiver_peer.mid, 10, nonce=self.counter)
+        tx = Transaction(self.my_peer.mid, topic, option, nonce=self.counter)
         tx.public_key = self.crypto.key_to_bin(self.my_peer.key.pub())
         tx.signature = self.crypto.create_signature(self.my_peer.key, tx.get_tx_bytes())
         # logging.info(
@@ -143,7 +167,7 @@ class MyCommunity(Community):
 
         # if the signature of tx is not valid we do nothing
         if not self.crypto.is_valid_signature(self.crypto.key_from_public_bin(tx.public_key), tx.get_tx_bytes(),
-                                              tx.signature):
+                                            tx.signature):
             logging.info(f'[Node {my_id}]: tx signature incorrect')
             return
 
@@ -182,7 +206,7 @@ class MyCommunity(Community):
         # stateless check
         my_id = self.get_peer_id(self.my_peer)
         if not self.crypto.is_valid_signature(self.crypto.key_from_public_bin(payload.public_key),
-                                              payload.get_block_bytes(), payload.signature):
+                                            payload.get_block_bytes(), payload.signature):
             logging.info(f'[Node {my_id}]: block signature incorrect')
             return
         logging.info(f'[Node {my_id}]: block signature correct')
@@ -202,23 +226,24 @@ class MyCommunity(Community):
 
         # Check block transactions and remove them from pending_txs list
         block_transactions = [self.serializer.unpack_serializable(Transaction, tx)[0] for tx in
-                              payload.block.transactions]
+                            payload.block.transactions]
         new_balances = self.balances.copy()
-        valid_txs = []
+        # valid_txs = []
 
+        # TODO: We should validate transactions at this point?
         for tx in block_transactions:
             tx_hash = tx.get_tx_hash()
 
-            if new_balances[tx.sender] - tx.amount >= 0:
-                new_balances[tx.sender] -= tx.amount
-                new_balances[tx.receiver] += tx.amount
+        #     if new_balances[tx.sender] - tx.amount >= 0:
+        #         new_balances[tx.sender] -= tx.amount
+        #         new_balances[tx.receiver] += tx.amount
 
-                if tx_hash in self.pending_txs.keys():
-                    self.pending_txs.pop(tx_hash)
+        #         if tx_hash in self.pending_txs.keys():
+        #             self.pending_txs.pop(tx_hash)
 
-                valid_txs.append(tx.get_tx_bytes())
+        #         valid_txs.append(tx.get_tx_bytes())
 
-        payload.block.set_transactions(valid_txs)
+        # payload.block.set_transactions(valid_txs)
         self.balances = new_balances
         self.blocks.append(payload.block)
 
@@ -276,10 +301,10 @@ async def start_communities() -> None:
         builder.add_key("my peer", "medium", f"ec{i}.pem")
         builder.add_overlay("MyCommunity", "my peer",
                             [WalkerDefinition(Strategy.RandomWalk,
-                                              10, {'timeout': 3.0})],
+                                            10, {'timeout': 3.0})],
                             default_bootstrap_defs, {}, [('started',)])
         await IPv8(builder.finalize(),
-                   extra_communities={'MyCommunity': MyCommunity}).start()
+                extra_communities={'MyCommunity': MyCommunity}).start()
     await run_forever()
 
 
