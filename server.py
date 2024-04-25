@@ -17,17 +17,21 @@ async def get_peers():
 @app.get("/vote/{topic}/{vote}")
 async def send_vote(topic: str, vote: str):
     ipv8_instance = app.ipv8_instance
-    node = ipv8_instance.overlays[0]
-
-    tx = node.create_transaction(topic, vote)
 
     if not ipv8_instance:
-        raise HTTPException(status_code=404, detail="IPv8 instance not found")
+        return {"status_code": 404, "error": "IPv8 instance not found", "reponse": {}}
 
-    if tx is None:
-        raise HTTPException(status_code=401, detail=tx)
+    node = ipv8_instance.overlays[0]
 
-    return {"status": "OK", "response": tx}
+    reponse = node.create_transaction(topic, vote)
+
+    if reponse is None:
+        return {"status_code": 401, "error": "There was a problem sending the vote. Please try again later.", "reponse": {}}
+
+    if "error" in reponse.keys():
+        return {"status_code": 401, "error": reponse["error"], "reponse": {}}
+
+    return {"status_code": 200, "status": "OK", "response": reponse}
 
 def run_web_server(ipv8_instance):
     app.ipv8_instance = ipv8_instance

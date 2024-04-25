@@ -1,5 +1,7 @@
 import streamlit as st
 import requests
+import time
+import pandas as pd
 
 
 # Data for the proposals
@@ -28,20 +30,8 @@ proposals = [
 ]
 # Home page
 
-def create_transaction():
-    data = requests.get("http://127.0.0.1:8000/get-peers").json()
-    print(data)
-
 def home_page():
     st.title("Proposals")
-
-
-    st.write("""
-        # Test app
-    """)
-
-    st.button("Create transaction", on_click=create_transaction)
-
 
     num_columns = 3
     num_proposals = len(proposals)
@@ -95,27 +85,51 @@ def proposal_page():
     if proposal["status"] == "active":
         vote = st.radio("Choose your option", proposal["options"])
         if st.button("Vote", type="primary"):
-            send_vote(str(proposal['title']).replace(" ", ""),vote)
+            send_vote(proposal['title'], vote)
     else:
         st.error("Voting is over, sorry")
 
     if "results" in proposal:
         st.subheader("Voting Results")
-        for option, count in proposal["results"].items():
-            st.write(f"{option}: {count}%")
+        if st.session_state.votes_amount == 0:
+            st.write("No votes yet")
+            return
 
+
+        votes = []
+        index = []
+        for option, count in proposal["results"].items():
+            votes.append(count)
+            index.append(option)
+        df = pd.DataFrame({"votes": votes}, index=index)
+
+        st.pyplot(df.plot.barh().figure,)
 
 
 # Replace it with something real, now its just simulation of the voting
 
-def send_vote(topic,vote):
-    request = requests.get(f"http://127.0.0.1:8000/vote/{topic}/{vote}").json()
-    print(request["response"])
-    # results = {option: 0 for option in st.session_state.current_proposal["options"]}
-    # results[vote] += 100
-    # st.session_state.current_proposal["results"] = results
-    # st.rerun()
+def send_vote(topic, vote):
+    topic = str(topic).replace(" ", "")
+    response = requests.get(f"http://127.0.0.1:8000/vote/{topic}/{vote}").json()
+    print('validate', "error" in response.keys())
 
+    if "error" in response.keys():
+        error = st.error(response["error"], icon="🚨")
+        time.sleep(2)
+        error.empty()
+        # WIP: Request the votes
+    else:
+        st.success("Vote registered successfully")
+
+    results = {option: 0 for option in st.session_state.current_proposal["options"]}
+    votes_amount = 0
+    if "response" in response.keys():
+        for option in response["response"].keys():
+            results[option] = response["response"][option]
+            votes_amount += response["response"][option]
+    st.session_state.votes_amount = votes_amount
+    st.session_state.current_proposal["results"] = results
+    st.rerun()
 
 
 # App function to control page rendering
