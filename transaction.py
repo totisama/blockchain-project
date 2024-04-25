@@ -9,7 +9,7 @@ from ipv8.messaging.serialization import default_serializer
 class Transaction:
     sender: bytes
     topic: str
-    vote: int
+    vote: str
     # TODO: Do we need nonce now?
     nonce: int = 1
     ttl: int = 3

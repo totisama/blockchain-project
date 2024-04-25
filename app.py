@@ -95,7 +95,7 @@ def proposal_page():
     if proposal["status"] == "active":
         vote = st.radio("Choose your option", proposal["options"])
         if st.button("Vote", type="primary"):
-            send_vote(vote)
+            send_vote(str(proposal['title']).replace(" ", ""),vote)
     else:
         st.error("Voting is over, sorry")
 
@@ -108,9 +108,9 @@ def proposal_page():
 
 # Replace it with something real, now its just simulation of the voting
 
-def send_vote(vote):
-    request = requests.get(f"http://127.0.0.1:8000/vote/{vote}/{vote}").json()
-    print(request)
+def send_vote(topic,vote):
+    request = requests.get(f"http://127.0.0.1:8000/vote/{topic}/{vote}").json()
+    print(request["response"])
     # results = {option: 0 for option in st.session_state.current_proposal["options"]}
     # results[vote] += 100
     # st.session_state.current_proposal["results"] = results
