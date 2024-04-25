@@ -1,5 +1,4 @@
 from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 # Create web server
@@ -14,6 +13,21 @@ async def get_peers():
         raise HTTPException(status_code=404, detail="IPv8 instance not found")
 
     return {"status": "OK", "number-of-peers": len(node.get_peers())}
+
+@app.get("/vote/{topic}/{vote}")
+async def get_peers(topic: str, vote: str):
+    ipv8_instance = app.ipv8_instance
+    node = ipv8_instance.overlays[0]
+
+    tx = node.create_transaction(topic, vote)
+
+    if not ipv8_instance:
+        raise HTTPException(status_code=404, detail="IPv8 instance not found")
+
+    if tx is None:
+        raise HTTPException(status_code=401, detail=tx.error)
+
+    return {"status": "OK"}
 
 def run_web_server(ipv8_instance):
     app.ipv8_instance = ipv8_instance
