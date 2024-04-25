@@ -12,3 +12,6 @@ packaging
 apispec>=6.0.0
 pyipv8
 streamlit
+fastapi
+pandas
+uvicorn
