@@ -8,15 +8,16 @@ from ipv8.messaging.serialization import default_serializer
 @dataclass(msg_id=1)  # The value 1 identifies this message and must be unique per community
 class Transaction:
     sender: bytes
-    receiver: bytes
-    amount: int
+    topic: str
+    vote: int
+    # TODO: Do we need nonce now?
     nonce: int = 1
     ttl: int = 3
     signature: bytes = b''
     public_key: bytes = b''
 
     def get_tx_bytes(self) -> bytes:
-        tx_copy = Transaction(self.sender, self.receiver, self.amount, self.nonce)
+        tx_copy = Transaction(self.sender, self.topic, self.vote, self.nonce)
         return default_serializer.pack_serializable(tx_copy)
 
     def get_tx_hash(self) -> str:
