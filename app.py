@@ -1,8 +1,6 @@
-import streamlit as st
-import pandas as pd
-
 from asyncio import run
 
+import streamlit as st
 from ipv8.configuration import ConfigBuilder, Strategy, WalkerDefinition, default_bootstrap_defs
 from ipv8_service import IPv8
 

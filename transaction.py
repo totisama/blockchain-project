@@ -1,5 +1,6 @@
 from hashlib import sha256
 
+from ipv8.messaging.lazy_payload import VariablePayload
 from ipv8.messaging.payload_dataclass import dataclass
 from ipv8.messaging.serialization import default_serializer
 
