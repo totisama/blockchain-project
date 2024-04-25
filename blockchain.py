@@ -79,8 +79,8 @@ class MyCommunity(Community):
 
         # Testing purpose
         # if id == 1:
-        random_transaction_interval = random.randint(5, 10)
-        self.register_task("tx_create", self.create_transaction, delay=7, interval=random_transaction_interval)
+        # random_transaction_interval = random.randint(5, 10)
+        # self.register_task("tx_create", self.create_transaction, delay=7, interval=random_transaction_interval)
 
         # random_check_interval = random.randint(5, 10)
         self.register_task("check_txs", self.block_creation, delay=7, interval=5)
@@ -96,7 +96,7 @@ class MyCommunity(Community):
     def create_transaction(self, topic: str = '', option: str = '') -> None:
         if not self.peers_found():
             logging.info(f'[Node {self.get_peer_id(self.my_peer)}] No peers found')
-            return
+            return  {"error": "No peers found"}
 
         if not topic or not option:
             return {"error": "Missing information"}
@@ -172,6 +172,17 @@ class MyCommunity(Community):
             return
 
         logging.info(f'[Node {my_id}]: tx signature correct')
+
+        if tx.topic in self.voted[tx.sender].keys():
+            return
+
+        self.voted[tx.sender][tx.topic] = True
+
+        if tx.option not in self.votes[tx.topic].keys():
+            self.votes[tx.topic][tx.option] = 0
+
+        self.votes[tx.topic][tx.option] += 1
+
         self.pending_txs[tx_hash] = tx
         if tx.ttl > 0:
             tx.ttl -= 1
