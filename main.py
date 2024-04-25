@@ -24,11 +24,10 @@ from transaction import Transaction
 k = 2
 
 logfile = 'logfile.log'
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s', handlers=[
-    logging.StreamHandler(),  # Log to stdout
-    logging.FileHandler(logfile)  # Log to a file
-])
-
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s: %(message)s',handlers=[
+        logging.StreamHandler(),  # Log to stdout
+        logging.FileHandler(logfile, mode='w')  # Log to a file
+    ])
 
 @dataclass(msg_id=2)
 class BlockMessage:
