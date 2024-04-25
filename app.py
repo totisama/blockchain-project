@@ -117,7 +117,7 @@ def send_vote(topic, vote):
         error = st.error(response["error"], icon="🚨")
         time.sleep(2)
         error.empty()
-        # WIP: Request the votes
+        response = requests.get(f"http://127.0.0.1:8000/votes/{topic}").json()
     else:
         st.success("Vote registered successfully")
 
