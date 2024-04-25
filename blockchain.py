@@ -174,10 +174,16 @@ class MyCommunity(Community):
 
         logging.info(f'[Node {my_id}]: tx signature correct')
 
+        if tx.sender not in self.voted.keys():
+            self.voted[tx.sender] = {}
+
         if tx.topic in self.voted[tx.sender].keys():
             return
 
         self.voted[tx.sender][tx.topic] = True
+
+        if tx.topic not in self.votes.keys():
+            self.votes[tx.topic] = {}
 
         if tx.vote not in self.votes[tx.topic].keys():
             self.votes[tx.topic][tx.vote] = 0

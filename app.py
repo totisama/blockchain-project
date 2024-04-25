@@ -111,7 +111,6 @@ def proposal_page():
 def send_vote(topic, vote):
     topic = str(topic).replace(" ", "")
     response = requests.get(f"http://127.0.0.1:8000/vote/{topic}/{vote}").json()
-    print('validate', "error" in response.keys())
 
     if "error" in response.keys():
         error = st.error(response["error"], icon="🚨")
