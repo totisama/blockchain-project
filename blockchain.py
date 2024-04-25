@@ -93,6 +93,11 @@ class MyCommunity(Community):
     def get_peer_id(self, peer: Peer = None) -> str:
         return binascii.hexlify(peer.mid).decode()
 
+    def get_votes(self, topic: str) -> Dict:
+        if topic in self.votes.keys():
+            return self.votes[topic]
+        return {"error": "Topic not found"}
+
     def create_transaction(self, topic: str = '', option: str = '') -> None:
         if not self.peers_found():
             logging.info(f'[Node {self.get_peer_id(self.my_peer)}] No peers found')
@@ -100,14 +105,6 @@ class MyCommunity(Community):
 
         if not topic or not option:
             return {"error": "Missing information"}
-
-        if topic not in self.votes.keys():
-            self.votes[topic] = {}
-
-        if option not in self.votes[topic].keys():
-            self.votes[topic][option] = 0
-
-        self.votes[topic][option] += 1
 
         if self.my_peer.mid not in self.voted.keys():
             self.voted[self.my_peer.mid] = {}
@@ -117,6 +114,14 @@ class MyCommunity(Community):
             return {"error": "Already voted for this topic"}
         else:
             self.voted[self.my_peer.mid][topic] = True
+
+        if topic not in self.votes.keys():
+            self.votes[topic] = {}
+
+        if option not in self.votes[topic].keys():
+            self.votes[topic][option] = 0
+
+        self.votes[topic][option] += 1
 
         # logging.info(f'[Node {self.get_peer_id(self.my_peer)}] Creating transaction')
         receiver_peer = random2.choice([i for i in self.get_peers()])
