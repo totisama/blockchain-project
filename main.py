@@ -78,7 +78,7 @@ class MyCommunity(Community):
         # Testing purpose
         # if id == 1:
         random_transaction_interval = random.randint(5, 10)
-        self.register_task("tx_create", self.create_transaction, delay=7, interval=random_transaction_interval)
+        self.register_task("tx_create", self.create_transaction, delay=7, interval=1)
 
         # random_check_interval = random.randint(5, 10)
         self.register_task("check_txs", self.block_creation, delay=7, interval=5)
@@ -126,9 +126,9 @@ class MyCommunity(Community):
             self.current_block.add_transaction(tx)
 
             if self.current_block.is_full():
-                logging.info(f'[Node {self.get_peer_id(self.my_peer)}] is creating a block {len(self.blocks)}')
-                self.finalize_and_broadcast_block()
                 break
+                # logging.info(f'[Node {self.get_peer_id(self.my_peer)}] is creating a block {len(self.blocks)}')
+        self.finalize_and_broadcast_block()
 
     @lazy_wrapper(Transaction)
     async def on_transaction(self, peer: Peer, tx: Transaction) -> None:
@@ -177,7 +177,7 @@ class MyCommunity(Community):
 
     @lazy_wrapper(BlockMessage)
     async def receive_block(self, peer: Peer, payload: BlockMessage) -> None:
-        logging.info(f'[Node {self.get_peer_id(self.my_peer)}] ----------on block----------')
+        logging.info(f'[Node {self.get_peer_id(self.my_peer)}] ----------on block---------- {len(payload.block.transactions)}')
 
         # stateless check
         my_id = self.get_peer_id(self.my_peer)
@@ -187,11 +187,11 @@ class MyCommunity(Community):
             return
         logging.info(f'[Node {my_id}]: block signature correct')
 
-        if payload.block.previous_hash not in [block.get_merkle_hash() for block in self.blocks]:
-            logging.info(f'[Node {my_id}]: requesting prev block')
-            # we don't know the prev block so we should request it
-            self.ez_send(peer, BlockRequest(payload.block.previous_hash))
-            return
+        # if payload.block.previous_hash not in [block.get_merkle_hash() for block in self.blocks]:
+        #     logging.info(f'[Node {my_id}]: requesting prev block')
+        #     # we don't know the prev block so we should request it
+        #     self.ez_send(peer, BlockRequest(payload.block.previous_hash))
+        #     return
 
         # stateful check
         # If the block is already in our chain we do nothing

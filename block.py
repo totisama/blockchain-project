@@ -27,7 +27,7 @@ class Block(VariablePayload):
         self.transactions = transactions
 
     def is_full(self) -> bool:
-        return len(self.transactions) >= 10
+        return len(self.transactions) >= 100
 
     def update_tree(self):
         self.merkle_tree.recalculate_tree()
