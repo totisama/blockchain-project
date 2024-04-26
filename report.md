@@ -16,7 +16,10 @@
 - Rodrigo Samayoa
 - Claudio Foti
 - Md Abuzar
+- Karina Ganieva
 - Stepa Spiridonov
+- Daniil Babin
+- Iskander Mukhametkassym
 
 ### Benchmarks
  - Benchmarking Latency
